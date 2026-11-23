@@ -99,7 +99,7 @@ class WorkflowRegistroDaPr(unittest.TestCase):
 
 class ModeloDaPr(unittest.TestCase):
     def conferir(self, corpo):
-        pr = Pr(corpo=corpo, head=HEAD, registros=[revisao(HEAD)], arquivos=["scripts/crew.py"], autor="dono", repositorio=REPO)
+        pr = Pr(corpo=corpo, head=HEAD, registros=[revisao(HEAD)], arquivos=["wiki/index.md"], autor="dono", repositorio=REPO)
         return conferir(pr)
 
     def test_o_modelo_cru_nao_passa_e_o_que_esta_em_comentario_nao_conta(self):

@@ -1,6 +1,14 @@
 import unittest
 
-from registro_da_pr import Pr, conferir, falta_da_issue, marca_de_prova_parcial, risco_do_revisor
+from registro_da_pr import (
+    CAMINHOS_SENSIVEIS,
+    Pr,
+    caminhos_sensiveis,
+    conferir,
+    falta_da_issue,
+    marca_de_prova_parcial,
+    risco_do_revisor,
+)
 from registro_texto import linhas_que_valem
 
 HEAD = "a" * 40
@@ -8,6 +16,17 @@ OUTRO = "b" * 40
 REPO = "vinicius928e8r84/home-repo"
 ISSUE = f"https://github.com/{REPO}/issues/12"
 FECHA = f"Closes {ISSUE}"
+CAMINHOS_DE_TESTE = (
+    "scripts/freios/freios.py",
+    ".github/workflows/freios.yml",
+    "scripts/crew.py",
+    ".pi/extensions/fm-calm.ts",
+    "model_routing.json",
+    "repos.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".agents/skills/pr/SKILL.md",
+)
 
 
 def revisao(head, **campos):
@@ -36,7 +55,7 @@ def pr(corpo, **mudancas):
         "corpo": corpo,
         "head": HEAD,
         "registros": [revisao(HEAD)],
-        "arquivos": ["scripts/crew.py"],
+        "arquivos": ["wiki/index.md"],
         "autor": "dono",
         "repositorio": REPO,
     }
@@ -58,10 +77,32 @@ class RegistroPassa(unittest.TestCase):
         self.assertTrue(ok, mensagem)
         self.assertIn("PROVADO 100% REAL", mensagem)
 
-    def test_caminho_sensivel_com_alta_e_prova(self):
+    def test_cada_caminho_sensivel_com_alta_e_prova_passa(self):
         corpo = f"Atenção: ALTA\n\n{FECHA}\n\n{prova(HEAD)}"
-        ok, mensagem = conferir(pr(corpo, arquivos=["scripts/freios/freios.py"]))
-        self.assertTrue(ok, mensagem)
+        for caminho in CAMINHOS_DE_TESTE:
+            with self.subTest(caminho=caminho):
+                ok, mensagem = conferir(pr(corpo, arquivos=[caminho]))
+                self.assertTrue(ok, mensagem)
+
+    def test_cada_caminho_sensivel_com_alta_sem_prova_reprova(self):
+        for caminho in CAMINHOS_DE_TESTE:
+            with self.subTest(caminho=caminho):
+                ok, mensagem = conferir(pr(f"Atenção: ALTA\n\n{FECHA}", arquivos=[caminho]))
+                self.assertFalse(ok, mensagem)
+                self.assertIn("não tem a seção", mensagem)
+
+    def test_caminhos_parecidos_mas_fora_da_lista_nao_sao_sensiveis(self):
+        parecidos = [
+            "scripts/crew.pyc", "scripts/crew.py.bak", "wiki/AGENTS.md", "docs/CLAUDE.md",
+            "model_routing.json.bak", "repos.jsonl", ".pit/x", ".github-old/x", ".agents/other/x",
+            "scripts/freios-old/x.py", ".agents/skills",
+        ]
+        self.assertEqual(caminhos_sensiveis(parecidos), [])
+
+    def test_a_lista_de_teste_cobre_toda_a_lista_do_check(self):
+        self.assertEqual(len(CAMINHOS_DE_TESTE), len(CAMINHOS_SENSIVEIS))
+        for sensivel, exemplo in zip(CAMINHOS_SENSIVEIS, CAMINHOS_DE_TESTE, strict=True):
+            self.assertTrue(exemplo.startswith(sensivel), (sensivel, exemplo))
 
     def test_vale_a_revisao_do_head_mesmo_com_uma_antiga_antes(self):
         ok, mensagem = conferir(pr(f"Atenção: BAIXA\n{FECHA}", registros=[revisao(OUTRO), revisao(HEAD)]))
@@ -91,6 +132,13 @@ class AtencaoFalha(unittest.TestCase):
         for caminho in ("scripts/freios/freios.py", ".github/workflows/freios.yml"):
             with self.subTest(caminho=caminho):
                 self.falha(f"Atenção: BAIXA\n{FECHA}", "mexe em caminho sensível", arquivos=[caminho])
+
+    def test_cada_caminho_sensivel_reprova_com_baixa_e_com_media(self):
+        for caminho in CAMINHOS_DE_TESTE:
+            for atencao in ("BAIXA", "MÉDIA"):
+                with self.subTest(caminho=caminho, atencao=atencao):
+                    trecho = f"conta como ALTA, mas o corpo diz {atencao}: {caminho}"
+                    self.falha(f"Atenção: {atencao}\n{FECHA}", trecho, arquivos=[caminho])
 
     def test_caminho_movido_para_fora_da_pasta_sensivel_conta(self):
         self.falha(f"Atenção: MÉDIA\n{FECHA}", "conta como ALTA", arquivos=["scripts/freios/antigo.py"])

@@ -23,7 +23,17 @@ FRASE = "PROVADO 100% REAL"
 SECAO_DA_PROVA = "Prova real"
 VEREDITO_LIMPO = "CLEAN"
 SEM_ISSUE = "Sem issue"
-CAMINHOS_SENSIVEIS = ("scripts/freios/", ".github/")
+CAMINHOS_SENSIVEIS = (
+    "scripts/freios/",
+    ".github/",
+    "scripts/crew.py",
+    ".pi/",
+    "model_routing.json",
+    "repos.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".agents/skills/",
+)
 MINIMO_DA_PROVA = 40
 MODELO = ".github/PULL_REQUEST_TEMPLATE.md"
 PUBLICADOR = "scripts/freios/registrar_na_pr.py"
@@ -191,8 +201,17 @@ def falta_do_texto_da_prova(prova, head):
     )
 
 
+def e_sensivel(caminho):
+    for sensivel in CAMINHOS_SENSIVEIS:
+        if sensivel.endswith("/") and caminho.startswith(sensivel):
+            return True
+        if caminho == sensivel:
+            return True
+    return False
+
+
 def caminhos_sensiveis(arquivos):
-    return [caminho for caminho in arquivos if caminho.startswith(CAMINHOS_SENSIVEIS)]
+    return [caminho for caminho in arquivos if e_sensivel(caminho)]
 
 
 def montar_quadro(textos, pr):

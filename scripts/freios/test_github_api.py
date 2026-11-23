@@ -127,7 +127,7 @@ class LeituraDoGitHub(unittest.TestCase):
 
 class MainDoRegistro(unittest.TestCase):
     def test_passa_com_a_pr_valida(self):
-        with Servidor(rotas_da_pr([{"filename": "scripts/crew.py"}])) as servidor:
+        with Servidor(rotas_da_pr([{"filename": "wiki/index.md"}])) as servidor:
             codigo, saida = rodar_main(ambiente(servidor))
         self.assertEqual(codigo, 0, saida)
         self.assertIn("registro da PR ok", saida)

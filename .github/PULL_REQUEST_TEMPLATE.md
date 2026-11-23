@@ -17,7 +17,8 @@ O check "Registro da PR" (.github/workflows/registro-da-pr.yml, scripts/freios/r
 O que está em comentário de HTML, em bloco de código ou em citação (>) não conta.
 
 1. Atenção: uma linha "Atenção: BAIXA", "Atenção: MÉDIA" ou "Atenção: ALTA" (o valor sozinho na linha).
-   ALTA é obrigatória se a PR mexe em scripts/freios/ ou em .github/, e exige a seção "Prova real" (item 4).
+   ALTA é obrigatória se a PR mexe em scripts/freios/, .github/, scripts/crew.py, .pi/, model_routing.json, repos.json,
+   AGENTS.md, CLAUDE.md ou .agents/skills/ (CAMINHOS_SENSIVEIS em scripts/freios/registro_da_pr.py), e exige a seção "Prova real" (item 4).
 
 2. Issue: uma linha "Closes <URL completa da issue>" por issue (https://github.com/vinicius928e8r84/home-repo/issues/<N>;
    o número solto não fecha nada), ou "Sem issue" sozinho na linha. Troque a linha Closes de cima por uma dessas.

@@ -13,7 +13,7 @@ CORPO = f"Atenção: BAIXA\n\n{FECHA}\n"
 
 
 class ClienteFalso:
-    def __init__(self, corpo=CORPO, registros=(), arquivos=("scripts/crew.py",), head=HEAD):
+    def __init__(self, corpo=CORPO, registros=(), arquivos=("wiki/index.md",), head=HEAD):
         self.repositorio = REPO
         self.corpo = corpo
         self.registros = list(registros)
