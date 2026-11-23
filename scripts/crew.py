@@ -609,8 +609,33 @@ def file_text(path):
 
 
 def write_text(path, text):
-    with open(path, "w", encoding="utf-8") as f:
+    """Replace the file in one step: a watcher killed mid-write must not leave a cut-short cursor behind."""
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write(text)
+    os.replace(tmp, path)
+
+
+def read_events():
+    out = []
+    if os.path.exists(EVENTS):
+        with open(EVENTS, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    out.append(None)  # a half-written line still counts as a line, so the cursor keeps its place
+    return out
+
+
+def notice_cursor(total):
+    """How many events the chief was already told about. Missing, empty or past the end of the log means "all of them":
+    a lost cursor must not replay the whole history to the chief."""
+    raw = file_text(NOTIFIED)
+    if not raw.isdigit() or int(raw) > total:
+        write_text(NOTIFIED, str(total))
+        return total
+    return int(raw)
 
 
 def describe(event):
@@ -636,6 +661,21 @@ def start_watcher(chief, every=20, stall=20):
     except OSError as e:
         raise Fail("watch", "could not start the watcher: %s" % e)
     return proc.pid
+
+
+def notify(chief):
+    """Tell the chief what happened since the last notice, once; what it was already told is never repeated."""
+    events = read_events()
+    told = notice_cursor(len(events))
+    news = [e for e in events[told:] if e and e["kind"] in NOTIFY]
+    if not news:
+        write_text(NOTIFIED, str(len(events)))
+    elif chief_state(chief) == "idle":
+        try:
+            send("notify", chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
+            write_text(NOTIFIED, str(len(events)))
+        except Fail as e:
+            print(json.dumps(dict(ok=False, step=e.step, error=e.error)), flush=True)
 
 
 def cmd_watch(a):
@@ -678,24 +718,10 @@ def cmd_watch(a):
                 new.append(emit("merged", name, branch=meta["branch"]))
             if snap["stalled"] and not old["stalled"]:
                 new.append(emit("stalled", name, minutes=a.stall))
-            with open(seen_file, "w", encoding="utf-8") as f:
-                json.dump(snap, f)
+            write_text(seen_file, json.dumps(snap))
             for event in new:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
-        lines = []
-        if os.path.exists(EVENTS):
-            with open(EVENTS, encoding="utf-8") as f:
-                lines = f.readlines()
-        told = int(file_text(NOTIFIED) or 0)
-        news = [e for e in map(json.loads, lines[told:]) if e["kind"] in NOTIFY]
-        if not news:
-            write_text(NOTIFIED, str(len(lines)))
-        elif chief_state(chief) == "idle":
-            try:
-                send("notify", chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
-                write_text(NOTIFIED, str(len(lines)))
-            except Fail as e:
-                print(json.dumps(dict(ok=False, step=e.step, error=e.error)), flush=True)
+        notify(chief)
         loops += 1
         if a.rounds and loops >= a.rounds:
             return dict(ok=True, rounds=loops)
