@@ -9,7 +9,8 @@ Este documento é só o plano. Parte da `main` em `fbc296c` (`crew.py` com 943 l
 - Sessões do Pi em `~/.pi/agent/sessions/<cwd codificado>/<data>_<id>.jsonl`. Cada resposta do modelo é uma linha `message` com `role: assistant`, `model`, `thinkingLevel`, `usage` (`input`, `output`, `cacheRead`, `cacheWrite`, `cost`), `stopReason` e, no erro, `errorMessage`. Ler as 114 sessões desta máquina (46 MB) leva 0,18 s: sem leitura incremental.
 - O tamanho do contexto agora é o `usage` da última resposta: `input + cacheRead + cacheWrite + output`. É o cálculo do `ctx.getContextUsage()` do Pi.
 - Pelo claude-bridge, o `cost` vem zerado (`totalFromProvider: false`).
-- `~/.pi/agent/models-store.json` tem, por modelo, o nome ("Claude Opus 5.5"), a janela (`contextWindow`: 1.000.000) e o preço por milhão de tokens (Opus 5.5: entrada 4, saída 20, cache lido 0,2, cache escrito 5 dólares).
+- Cada compactação é uma linha `compaction` na sessão, com hora e `tokensBefore`.
+- `~/.pi/agent/models-store.json` tem, por modelo, o nome ("Claude Opus 5.5"), a janela (`contextWindow`: 1.000.000).
 - O `.pi/settings.json` do home-repo compacta o Opus 5.5 com `reserveTokens` 850.000, ou seja, aos 150k de 1M (D20). O global faz o mesmo com o Sonnet 5.5.
 - O pi-claude-bridge recebe do Claude Code um `rate_limit_event` por requisição e o entrega ao hook `after_provider_response` do Pi como cabeçalhos `anthropic-ratelimit-unified-*`: `status` (`allowed`, `allowed_warning`, `rejected`), `overage-status`, e uso e reset das janelas `5h` e `7d` (`src/rate-limit.ts`). `isUsingOverage` e `overageInUse` não viram cabeçalho.
 - `crew.py tell chief "..."` falha: `no worker named 'chief'`. O worker não tem como falar com o chief; o `ask` só registra Decisão do dono.
@@ -32,7 +33,7 @@ Uma linha por worker, quem precisa de atenção no topo. O nome `time` é do don
 ! home-crew-na-vps    home-repo · implement  Sonnet 5.5 high  ERRO: 401 authentication_error  aberto 10:12  faltam 62k até compactar  PR #11 13438c9 espera conserto do CI
 ! home-freios-script  home-repo · implement  Sonnet 5.5 high  parado há 34 min  aberto 11:02 · turno 41 min  faltam 18k até compactar  PR #12 d9687ff espera revisão
 ? home-fila-merge     home-repo · merge  Opus 5.5 medium  espera dono: Mesclar a #11 antes da #5?  aberto 12:30  faltam 77k até compactar  sem PR
-  home-painel-do-time home-repo · plan  Opus 5.5 medium  trabalhando  aberto 13:32 · turno 12 min  faltam 61k até compactar  sem PR
+  home-painel-do-time home-repo · plan  Opus 5.5 medium  trabalhando  aberto 13:32 · turno 12 min  faltam 61k até compactar · 1 compactação (14:02)  sem PR
 - home-skills-links   home-repo · implement  Sonnet 5.5 high  fechado  aberto 11:40 · fechou 13:53  PR #13 mesclada
 ```
 
@@ -41,7 +42,8 @@ Uma linha por worker, quem precisa de atenção no topo. O nome `time` é do don
 | marca | estado | `!` erro, parou ou parado; `?` espera alguém; vazio rodando ou ocioso; `-` fechado |
 | nome, repo, tipo | `meta.json` (`name`, `repo`, `type`) | — |
 | modelo e esforço | última resposta da sessão (`model`, `thinkingLevel`); sem resposta ainda, `meta.json` (`model`, `thinking`) | nome do catálogo do Pi sem "Claude ": "Opus 5.5 medium". Modelo fora do catálogo aparece com o id inteiro |
-| contexto | `usage` da última resposta; janela e limiar de compactação do catálogo e do `settings.json` (o do worktree sobre o global) | "faltam 61k até compactar" ou "faltam 880k de 1M", conforme a Decisão sobre o contexto (abaixo). Depois de uma compactação, até a próxima resposta, mostra "compactou às HH:MM" |
+| contexto | `usage` da última resposta; janela e limiar de compactação do catálogo e do `settings.json` (o do worktree sobre o global) | "faltam 61k até compactar" (D56). Depois de uma compactação, até a próxima resposta, "compactou às HH:MM" |
+| compactações | linhas `compaction` das sessões do worker | "2 compactações (11:40, 13:05)"; nada quando não houve |
 | estado | `state.json`, decisões e perguntas abertas, estados da frota PR 2, `stalled` do último `watch.json` | um só, nesta ordem: ERRO (com os primeiros 60 caracteres da mensagem), PAROU por X, parado há N min, espera dono (título da Decisão), espera chief (título da Pergunta), trabalhando, ocioso há N |
 | abriu, fechou, turno | `meta.json` (`started`, `closed`); `state.json` (`at` do último `working`) | horário local HH:MM; "turno N min" só trabalhando |
 | PR, head, o que espera | cache de PRs do vigia (seção 1.1) | "espera CI", "espera conserto do CI", "espera revisão", "espera Prova real", "espera merge", "mesclada" |
@@ -79,14 +81,14 @@ O vigia acorda o chief (seção 4) ao passar de 80% em qualquer janela e ao cheg
 
 Ao fechar um worker (`close`), o `crew.py` grava uma linha em `state/crew/metricas.jsonl`:
 
-`worker`, `repo`, `tarefa`, `tipo`, `modelo`, `esforco`, `abriu`, `fechou`, `minutos_trabalhando`, `turnos`, `tokens` (`entrada`, `saida`, `cache_lido`, `cache_escrito`), `custo_usd`, `custo_fonte`, `pr`, `categoria`, `atencao`, `mesclada`, `sessoes`. Este worker, no meio do plano: 46 de entrada, 14.860 de saída, 1.179.416 de cache lido, 86.811 de cache escrito, cerca de 0,97 dólar estimado.
+`worker`, `repo`, `tarefa`, `tipo`, `modelo`, `esforco`, `abriu`, `fechou`, `minutos_trabalhando`, `turnos`, `tokens` (`entrada`, `saida`, `cache_lido`, `cache_escrito`), `compactacoes` (a hora e o `tokensBefore` de cada uma), `pr`, `categoria`, `atencao`, `mesclada`, `sessoes`. Este worker, no meio do plano: 46 de entrada, 14.860 de saída, 1.179.416 de cache lido, 86.811 de cache escrito.
 
 - Tokens: soma do `usage` de todas as respostas das sessões do worker, compactações incluídas.
-- Custo: o do provedor quando `totalFromProvider` é verdadeiro; senão, tokens vezes o preço do catálogo do Pi, com `custo_fonte: "estimado"` (Decisão sobre o custo, abaixo).
+- Custo não se grava (D57): sai depois dos tokens.
 - `minutos_trabalhando`: soma dos intervalos `working` do `state.json`, acumulada pelo vigia.
 - Categoria e atenção: da linha do corpo da PR (seção 3), pelo cache de PRs.
 
-Relatório: `crew.py metricas [--por tarefa|tipo|categoria|repo|modelo] [--desde AAAA-MM-DD]`, uma tabela com workers, horas, tokens por tipo e custo por grupo, mais o total. `--abertos` inclui os workers ainda abertos, lidos na hora.
+Relatório: `crew.py metricas [--por tarefa|tipo|categoria|repo|modelo] [--desde AAAA-MM-DD]`, uma tabela com workers, horas, tokens por tipo e compactações por grupo, mais o total. `--abertos` inclui os workers ainda abertos, lidos na hora.
 
 Retroativo: `crew.py metricas --recolher` grava os workers já fechados cuja sessão está no disco.
 
@@ -100,12 +102,13 @@ Cada PR diz o propósito numa linha do corpo, separada da atenção:
 **Categoria:** conserto
 ```
 
-Valores (Decisão sobre as categorias, abaixo): `freio` (regra, lint, check, guarda), `conserto`, `recurso` (recurso novo), `limpeza`, `refatoração`, `plano` (plano ou documento), `pesquisa`. Uma só por PR; uma PR que é duas coisas vira duas PRs.
+Valores, lista provisória (D58; o dono fará a definitiva): `freio` (regra, lint, check, guarda), `conserto`, `recurso` (recurso novo), `limpeza`, `refatoração`, `plano` (plano ou documento), `pesquisa`. Uma só por PR; uma PR que é duas coisas vira duas PRs.
 
+- A lista mora num lugar só, `scripts/freios/categorias.json`; o Registro, o template e as métricas a leem dali. Trocar a lista é editar esse arquivo, que vale depois de mesclado (o Registro roda as regras da base).
 - O check Registro da PR (PR #14, `scripts/freios/registro_da_pr.py`) passa a exigir uma única linha `Categoria:` com um desses valores, pelo mesmo caminho da linha `Atenção:` (`valores_de`, sem caixa e sem acento). Falta ou valor fora da lista: o check falha dizendo os valores válidos.
-- `.github/PULL_REQUEST_TEMPLATE.md` ganha `**Categoria:**` abaixo de `**Atenção:**`, e o comentário do template explica a lista; o skill `pr` aponta para o template.
+- `.github/PULL_REQUEST_TEMPLATE.md` ganha `**Categoria:**` abaixo de `**Atenção:**`, e o comentário aponta para o `categorias.json`.
 - Como o Registro roda as regras da base, a exigência só vale para PRs abertas depois de mesclada; a própria PR que a cria ainda passa sem ela.
-- Rótulo do GitHub: fica de fora. Sincronizar o rótulo exige `pull-requests: write` no workflow, e a linha do corpo já é a fonte que o cache de PRs e as métricas leem.
+- Sem rótulo do GitHub (D58).
 
 ## 4. Supervisão filtrada
 
@@ -171,9 +174,9 @@ Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro ag
 | 3 | Cota da conta Claude: `crew-cota.ts`, linha no painel, avisos de 80%, limite e Extra Usage | `.pi/extensions/crew-cota.ts`, `crew_painel.py`, `crew.py` | 2 | cabeçalhos reais gravados viram o `cota.json` esperado; relógio falso: um aviso por janela até o reset |
 | 4 | Cache de PRs do vigia e coluna PR, head, o que espera | `crew_painel.py`, `crew.py` | 2 | saídas de `gh` gravadas em arquivo: cada caso de "espera" |
 | 5 | Supervisão filtrada, resumo de 30 min, PR pronta para revisão e para merge, regras de chat do chief | `crew.py`, `chief-of-staff/SKILL.md`, `test_crew.py` | 4, frota PR 2 | relógio falso: o resumo sai a cada 30 min só com novidade; `merged` não acorda; aviso sem título reprova |
-| 6 | Categoria no Registro da PR e no template | `scripts/freios/`, `.github/PULL_REQUEST_TEMPLATE.md` | #14 mesclada | casos do `test_registro_da_pr.py`: sem linha, duas linhas, valor fora da lista, valor com acento |
+| 6 | Categoria no Registro da PR e no template | `scripts/freios/`, `.github/PULL_REQUEST_TEMPLATE.md` | #14 mesclada | casos do `test_registro_da_pr.py`: sem linha, duas linhas, valor fora da lista, valor com acento, lista trocada no `categorias.json` |
 | 7 | Fila de decisões do dono na página lavish e respostas pelo vigia | `crew_decisoes.py`, `crew.py` | 1, 5 | saída de `poll` gravada vira `answer` e aviso ao chief; Prova real: uma rodada com o dono |
-| 8 | Métricas: linha no `close`, `metricas`, `--recolher` | `crew_metricas.py`, `crew.py` | 2, 6 | sessões de exemplo: somas e custo estimado batem com a conta à mão |
+| 8 | Métricas: linha no `close`, `metricas`, `--recolher` | `crew_metricas.py`, `crew.py` | 2, 6 | sessões de exemplo: somas e compactações batem com a conta à mão |
 
 Com a frota durável, a ordem sugerida é: divisão do `crew.py` → painel 1 → painel 2 → painel 3 → frota 1 → frota 2 → painel 4 → painel 5 → painel 6 (assim que a #14 entrar) → frota 3 a 9 e painel 7 e 8, intercalados. Painel 5 e frota 2 mexem no mesmo `notify`; quem vier depois rebaseia. O aviso de cota da PR 3 entra direto como motivo de acordar, sem esperar a PR 5.
 
@@ -191,9 +194,9 @@ O essencial são as PRs 1, 2 e 5: o worker fala com o chief, o chief vê o time 
 
 ## Decisões que só o dono toma
 
-Registradas com `crew.py ask`, cada uma com a recomendação:
+Registradas com `crew.py ask`:
 
-1. **Contexto: contar até a compactação ou até a janela** (D56) — com a compactação aos 150k, "faltam 880k de 1M" nunca acende. Recomendação: "faltam 61k até compactar".
-2. **Custo: estimar pelo preço da API** (D57) — o claude-bridge não informa preço. Recomendação: estimar pelo catálogo do Pi, marcado "estimado".
-3. **Categorias de PR e onde marcar** (D58) — recomendação: as sete acima, uma por PR, só na linha do corpo, exigida pelo Registro.
+1. **Contexto: contar até a compactação ou até a janela** (D56) — decidida: até a compactação, e marcar quantas compactações houve e quando, no painel e nas métricas.
+2. **Custo: estimar pelo preço da API** (D57) — decidida: não; só tokens, e o custo se calcula depois.
+3. **Categorias de PR e onde marcar** (D58) — decidida: só a linha no corpo; as sete são provisórias, num arquivo só.
 4. **Quantas PRs fazer** (D59) — recomendação: as oito, na ordem acima; se for para cortar, ficar com 1, 2, 3, 5 e 6.
