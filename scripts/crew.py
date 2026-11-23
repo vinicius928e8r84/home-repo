@@ -32,7 +32,6 @@ EVENTS = os.path.join(STATE, "events.jsonl")
 CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
-CHIEF_STATE = os.path.join(STATE, "_chief", "state.json")
 
 
 class Fail(Exception):
@@ -81,6 +80,11 @@ def herdr(step, *args):
         return json.loads(text)
     except ValueError:
         return text
+
+
+def chief_state(pane):
+    """What the chief in `pane` last wrote. The file is per pane, so no other Pi session can overwrite it."""
+    return file_state(os.path.join(STATE, "_chief", re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".json")).get("state")
 
 
 def passthrough():
@@ -326,7 +330,17 @@ def snapshot(meta, fetch, stall_minutes=0):
 BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False)
 
 
+def ensure_watcher():
+    """Open workers with nobody watching them: start the watcher, when this runs in a Herdr pane."""
+    if workers() and not watcher_alive() and os.environ.get("HERDR_PANE_ID"):
+        try:
+            start_watcher(my_pane("watch"))
+        except Fail:
+            pass
+
+
 def cmd_status(a):
+    ensure_watcher()
     rows = []
     for meta in workers(a.all):
         snap = dict(state="closed") if meta.get("closed") else snapshot(meta, False)
@@ -337,6 +351,7 @@ def cmd_status(a):
 
 
 def cmd_events(a):
+    ensure_watcher()
     lines = []
     if os.path.exists(EVENTS):
         with open(EVENTS, encoding="utf-8") as f:
@@ -452,7 +467,7 @@ def cmd_watch(a):
             pending.extend(new)
             for event in new:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
-        if pending and file_state(CHIEF_STATE).get("state") == "idle":
+        if pending and chief_state(chief) == "idle":
             try:
                 send("notify", chief, "[crew] %s. Rode `python scripts/crew.py events` e avise o dono do que importa." % "; ".join(describe(e) for e in pending))
                 pending = []

@@ -1,10 +1,12 @@
 // Publishes this Pi session's lifecycle state, for scripts/crew.py and for Herdr.
 //
-// File: a worker gets its path through CREW_STATE_FILE; a session started in the
-// Home Repo without it is the chief and writes state/crew/_chief/state.json.
-// Herdr: inside a Herdr pane the same state is reported with the Herdr CLI, so the
-// session shows in Herdr's agents list under CREW_AGENT_NAME (the chief: "chief").
-// Herdr's own Pi integration cannot reach the server on Windows; the CLI can.
+// File: a worker gets its path through CREW_STATE_FILE. A session started in the
+// Home Repo inside a Herdr pane, without that variable, is a chief and writes
+// state/crew/_chief/<pane>.json, one file per pane, so a second Pi session in this
+// folder (a test, a headless run) never overwrites the chief's state.
+// Herdr: the same state is reported with the Herdr CLI, so the session shows in
+// Herdr's agents list under CREW_AGENT_NAME (a chief: "chief"). Herdr's own Pi
+// integration cannot reach the server on Windows; the CLI can.
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -54,8 +56,9 @@ export default function (pi: any) {
     if (process.env.CREW_STATE_FILE) {
       file = process.env.CREW_STATE_FILE;
       name = process.env.CREW_AGENT_NAME;
-    } else if (isHomeRepo(cwd)) {
-      file = path.join(cwd, "state", "crew", "_chief", "state.json");
+    } else if (pane && isHomeRepo(cwd)) {
+      const dir = process.env.CREW_STATE_DIR || path.join(cwd, "state", "crew");
+      file = path.join(dir, "_chief", `${pane.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
       name = "chief";
     }
     write("idle");
