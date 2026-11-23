@@ -28,26 +28,30 @@ export function createCalmWorkingPresentation(): CalmWorkingPresentation {
   // or removed on a real transition, so repeated starts cannot duplicate its timer.
   // The slot is shared with standalone Pi Calm; the dispose signal prevents turning
   // Firstmate Calm off from clearing a widget that the other extension installed.
+  const changeShip = (ui: ExtensionUIContext, showShip: boolean): void => {
+    if (showShip) {
+      ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, (tui) => {
+        workingShipWidgetDisposed = false;
+        const widget = createCalmWorkingShipWidget(tui, workingShipAnimation);
+        const dispose = widget.dispose;
+        widget.dispose = () => {
+          workingShipWidgetDisposed = true;
+          dispose();
+        };
+        return widget;
+      });
+      ui.setWorkingVisible(false);
+    } else if (!workingShipWidgetDisposed) {
+      ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, undefined);
+      ui.setWorkingVisible(true);
+    }
+  };
+
   const apply = (ui: ExtensionUIContext, forceStockVisibility = false): void => {
     const showShip = agentRunActive && calmPresentationIsActive();
     if (showShip !== workingShipShown) {
       workingShipShown = showShip;
-      if (showShip) {
-        ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, (tui) => {
-          workingShipWidgetDisposed = false;
-          const widget = createCalmWorkingShipWidget(tui, workingShipAnimation);
-          const dispose = widget.dispose;
-          widget.dispose = () => {
-            workingShipWidgetDisposed = true;
-            dispose();
-          };
-          return widget;
-        });
-        ui.setWorkingVisible(false);
-      } else if (!workingShipWidgetDisposed) {
-        ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, undefined);
-        ui.setWorkingVisible(true);
-      }
+      changeShip(ui, showShip);
     } else if (forceStockVisibility && !showShip && !workingShipWidgetDisposed) {
       ui.setWorkingVisible(true);
     }

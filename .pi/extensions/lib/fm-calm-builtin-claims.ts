@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import type { ExtensionAPI, ExtensionUIContext, ToolDefinition, ToolInfo } from "@earendil-works/pi-coding-agent";
+import { reportCalmDiagnostic } from "./fm-calm-diagnostic.ts";
 
 // Resolves symlinks before comparing tool-ownership identity below: sourceInfo.path
 // values come from independent path-resolution code paths (this module's own
@@ -28,6 +29,12 @@ export function createCalmBuiltInClaims(
 ): CalmBuiltInClaims {
   const extensionRealFile = realpathOrSelf(extensionFile);
 
+  const foreignOwner = (registered: ToolInfo[], tool: ToolDefinition<any, any, any>): ToolInfo["sourceInfo"] | undefined => {
+    const owner = registered.find((info) => info.name === tool.name)?.sourceInfo;
+    if (owner && owner.source !== "builtin" && realpathOrSelf(owner.path) !== extensionRealFile) return owner;
+    return undefined;
+  };
+
   // True once this extension has handled built-in registration for its lifetime:
   // either all seven synchronously at load, or only the uncontested subset during
   // first activation.
@@ -55,13 +62,10 @@ export function createCalmBuiltInClaims(
       registered = pi.getAllTools();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.error(`Firstmate Calm: built-in ownership check unavailable, claiming every built-in unconditionally. ${reason}`);
+      reportCalmDiagnostic(`Firstmate Calm: built-in ownership check unavailable, claiming every built-in unconditionally. ${reason}`);
       return [];
     }
-    return wrappedBuiltIns.filter((tool) => {
-      const owner = registered.find((info) => info.name === tool.name)?.sourceInfo;
-      return owner !== undefined && owner.source !== "builtin" && realpathOrSelf(owner.path) !== extensionRealFile;
-    });
+    return wrappedBuiltIns.filter((tool) => foreignOwner(registered, tool) !== undefined);
   }
 
   // The first time Calm turns on in a session that started off, claim every
@@ -84,7 +88,7 @@ export function createCalmBuiltInClaims(
       "warning",
     );
     for (const tool of contested) {
-      console.error(`Firstmate Calm: skipped claiming built-in "${tool.name}" because another extension already owns it.`);
+      reportCalmDiagnostic(`Firstmate Calm: skipped claiming built-in "${tool.name}" because another extension already owns it.`);
     }
   }
 
@@ -101,13 +105,13 @@ export function createCalmBuiltInClaims(
       registered = pi.getAllTools();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.error(`Firstmate Calm: built-in ownership check unavailable. ${reason}`);
+      reportCalmDiagnostic(`Firstmate Calm: built-in ownership check unavailable. ${reason}`);
       return;
     }
     for (const tool of wrappedBuiltIns) {
-      const owner = registered.find((info) => info.name === tool.name)?.sourceInfo;
-      if (owner && owner.source !== "builtin" && realpathOrSelf(owner.path) !== extensionRealFile) {
-        console.error(
+      const owner = foreignOwner(registered, tool);
+      if (owner) {
+        reportCalmDiagnostic(
           `Firstmate Calm: another extension (${owner.path}) also claimed the built-in "${tool.name}" tool and won; Calm's presentation for it is unavailable this session.`,
         );
       }
