@@ -50,7 +50,7 @@ jobs:
       - name: Freios
         run: |
           set -o pipefail
-          python scripts/freios/freios.py --tudo 2>&1 | tee "$RUNNER_TEMP/freios.txt"
+          python scripts/freios/freios.py --tudo --sem-testes 2>&1 | tee "$RUNNER_TEMP/freios.txt"
       - name: Voltar aos freios da PR
         if: ${{ !cancelled() && env.FREIOS_DA_BASE == '1' }}
         run: |

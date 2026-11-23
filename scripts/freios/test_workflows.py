@@ -49,7 +49,7 @@ class WorkflowFreios(unittest.TestCase):
         self.assertRegex(self.texto, r"(?m)^  push:\n    branches: \[main\]$")
 
     def test_roda_o_comando_unico_dos_freios_e_os_testes(self):
-        self.assertIn("python scripts/freios/freios.py --tudo 2>&1 | tee", self.texto)
+        self.assertIn("python scripts/freios/freios.py --tudo --sem-testes 2>&1 | tee", self.texto)
         self.assertIn("run: python -m unittest discover\n", self.texto)
 
     def test_instala_ruff_e_as_dependencias_do_eslint_antes_dos_freios(self):

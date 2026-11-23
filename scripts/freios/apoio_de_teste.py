@@ -26,7 +26,7 @@ def contexto_de_memoria(arquivos, links=None, raiz=None, **configuracao):
 
 class RepositorioTemporario:
     def __init__(self):
-        self._herdadas = {n: os.environ.pop(n) for n in list(os.environ) if n.startswith("GIT_")}
+        self._herdadas = {n: os.environ.pop(n) for n in list(os.environ) if n.startswith("GIT_") or n == "CI"}
         self._pasta = tempfile.TemporaryDirectory()
         self.raiz = Path(self._pasta.name)
         self.git("init", "-q", "-b", "main")
