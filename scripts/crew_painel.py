@@ -51,15 +51,15 @@ def modelo_e_esforco(meta, sessao, contexto):
     return ("%s %s" % (nome.replace("Claude ", ""), esforco)).strip()
 
 
-def contexto_e_compactacoes(sessao):
+def contexto_e_compactacoes(sessao, vivo):
     partes = []
     atual, limite = sessao.get("contexto"), sessao.get("compacta_em")
     feitas = sessao.get("compactacoes") or []
-    if sessao.get("depois_de_compactar") and feitas:
+    if vivo and sessao.get("depois_de_compactar") and feitas:
         partes.append("compactou às %s" % hora(feitas[-1]["em"]))
-    elif atual is not None and limite:
+    elif vivo and atual is not None and limite:
         partes.append("faltam %s até compactar" % mil(max(0, limite - atual)))
-    elif atual is not None:
+    elif vivo and atual is not None:
         partes.append("contexto %s" % mil(atual))
     if feitas:
         horas = ", ".join(hora(c["em"]) for c in feitas)
@@ -85,7 +85,7 @@ def estado_de(meta, contexto, sessao):
     if sessao.get("erro") and estado != "working":
         return "!", "ERRO: %s" % curto(sessao["erro"])
     if vigia.get("stalled") and estado == "working":
-        return "!", "parado há %d min" % minutos((vigia.get("progress") or {}).get("at"), agora)
+        return "!", "parado há %d min" % minutos((vigia.get("progress") or {}).get("at") or visto.get("at"), agora)
     esperando = pedidos_abertos(meta, contexto["decisoes"])
     if esperando:
         return "?", "espera dono: %s" % curto(esperando[0].get("question"))
@@ -109,7 +109,7 @@ def linha_de(meta, contexto):
     sessao = sessao_do(meta, contexto)
     marca, estado = estado_de(meta, contexto, sessao)
     partes = ["%s %s" % (marca, meta["name"]), "%s · %s" % (meta["repo"], meta.get("type", "?")), modelo_e_esforco(meta, sessao, contexto), estado,
-              "aberto %s" % hora(meta.get("started")), contexto_e_compactacoes(sessao), pr_de(meta, contexto)]
+              "aberto %s" % hora(meta.get("started")), contexto_e_compactacoes(sessao, marca != "-" and estado != "painel fechou"), pr_de(meta, contexto)]
     return dict(marca=marca, aberto=meta.get("started") or "", ocioso=estado.startswith("ocioso"), texto="  ".join(p for p in partes if p))
 
 

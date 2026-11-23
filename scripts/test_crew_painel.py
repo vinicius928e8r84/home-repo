@@ -170,6 +170,10 @@ class PainelTest(Base):
         self.assertTrue(linhas[1].startswith("! home-p"))
         self.assertIn("parado há 34 min", linhas[1])
 
+    def test_parado_sem_marca_de_progresso_conta_do_ultimo_turno(self):
+        gravar(os.path.join(self.estado, "home-p", "watch.json"), json.dumps(dict(stalled=True)))
+        self.assertIn("parado há 25 min", self.painel([self.worker("home-p", "working", 25)])[1])
+
     def test_espera_dono_mostra_a_pergunta(self):
         decisoes = {"D1": dict(worker="home-d", status="open", question="Mesclar a #11 antes da #5?"), "D2": dict(worker="home-d", status="answered", question="velha")}
         linhas = self.painel([self.worker("home-d", "working")], decisoes)
@@ -190,6 +194,14 @@ class PainelTest(Base):
         self.assertEqual([x[2:].split()[0] for x in self.painel([recente, antigo])[1:]], ["home-r"])
         self.assertTrue(self.painel([recente])[1].startswith("- home-r"))
         self.assertEqual(len(self.painel([recente, antigo], fechados=True)), 3)
+
+    def test_fechado_e_painel_fechou_nao_dizem_quanto_falta_mas_contam_compactacoes(self):
+        self.sessao("home-f", "1", cabeca(50), resposta(40, lido=5000), compactacao(30, 150000), resposta(20, lido=5000))
+        fechado = self.painel([self.worker("home-f", "idle", closed=iso(5))])[1]
+        sumiu = self.painel([self.worker("home-f", "gone")])[1]
+        for texto in (fechado, sumiu):
+            self.assertNotIn("faltam", texto)
+            self.assertIn("1 compactação", texto)
 
     def test_pr_e_head_vem_do_cache_do_vigia(self):
         meta = self.worker("home-x", "working")
