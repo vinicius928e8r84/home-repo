@@ -40,7 +40,6 @@ CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
 DECISIONS = os.path.join(STATE, "decisions.jsonl")
 NOTIFIED = os.path.join(STATE, "notify.cursor")
-NOTIFY = {"report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started", "not_pi"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
 UNSTARTED_MINUTES = 4
 
@@ -56,18 +55,22 @@ class Namespace:
         return globals()[name]
 
 
-REMOTE = []
+MODULES = {}
+
+
+def module(name):
+    if name not in MODULES:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name + ".py")
+        spec = importlib.util.spec_from_file_location(name, path)
+        loaded = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(loaded)
+        loaded.Fail, loaded.crew = Fail, Namespace()
+        MODULES[name] = loaded
+    return MODULES[name]
 
 
 def remote():
-    if not REMOTE:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crew_remote.py")
-        spec = importlib.util.spec_from_file_location("crew_remote", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        module.Fail, module.crew = Fail, Namespace()
-        REMOTE.append(module)
-    return REMOTE[0]
+    return module("crew_remote")
 
 
 def git_argv(meta):
@@ -752,17 +755,6 @@ def notice_cursor(total):
     return int(raw)
 
 
-def describe(event):
-    text = {"gone": "o painel fechou",
-            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "não progride: a tela e os commits não mudam há tempo demais",
-            "never_started": "o painel abriu mas o Pi nunca começou (0 turnos)"}
-    if event["kind"] == "not_pi":
-        return "%s: o agente do painel agora é %s, não Pi (o restore do Herdr reabriu o painel; o contexto do worker se perdeu)" % (event["worker"], event.get("agent"))
-    if event["kind"] == "decision_needed":
-        return "%s precisa de uma decisão do dono (%s)" % (event["worker"], event.get("id"))
-    return "%s: %s" % (event["worker"], text.get(event["kind"], event["kind"]))
-
-
 def watcher_alive():
     return os.path.exists(HEARTBEAT) and time.time() - os.path.getmtime(HEARTBEAT) < 90
 
@@ -778,19 +770,6 @@ def start_watcher(chief, every=20, stall=20):
     except OSError as e:
         raise Fail("watch", "could not start the watcher: %s" % e)
     return proc.pid
-
-
-def notify(chief):
-    events = read_events()
-    told = notice_cursor(len(events))
-    news = [e for e in events[told:] if e and e["kind"] in NOTIFY]
-    if news:
-        try:
-            tell_chief(chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
-        except OSError as e:
-            print(json.dumps(dict(ok=False, step="notify", error=str(e))), flush=True)
-            return
-    write_text(NOTIFIED, str(len(events)))
 
 
 def cmd_watch(a):
@@ -842,7 +821,7 @@ def cmd_watch(a):
             write_text(seen_file, json.dumps(snap))
             for event in new:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
-        notify(chief)
+        module("crew_vigia").rodada(chief, getattr(a, "resumo", 30))
         loops += 1
         if a.rounds and loops >= a.rounds:
             return dict(ok=True, rounds=loops)
@@ -912,10 +891,11 @@ def main():
     s.add_argument("name")
     s.add_argument("--force", action="store_true", help="close an unmerged worker, or one whose worktree git cannot remove (the folder is deleted if it is inside ~/worktrees); its branch is kept")
     s.set_defaults(fn=cmd_close)
-    s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls, workers that never started, panes that died or stopped being Pi, and tells the chief. spawn starts it")
+    s = sub.add_parser("watch", help="the hidden background watcher: logs what happens and wakes the chief only for errors, stalls, requests, PRs ready for review or merge and merged branches; the rest goes to state/crew/resumo.md. spawn starts it")
     s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")
     s.add_argument("--every", type=int, default=20, help="seconds between checks")
     s.add_argument("--stall", type=int, default=20, help="minutes without progress (same screen, same commits) before a working worker counts as stalled")
+    s.add_argument("--resumo", type=int, default=30, help="minutes between lines of state/crew/resumo.md (what did not wake the chief)")
     s.add_argument("--unstarted", type=int, default=UNSTARTED_MINUTES, help="minutes a worker may sit at 0 turns before it counts as never started")
     s.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_watch)
