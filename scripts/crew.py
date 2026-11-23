@@ -146,7 +146,6 @@ def tell_chief(pane, text):
 
 
 def passthrough():
-    """--env flags that carry the test overrides into a tab this script opens."""
     out = []
     for key in ("CREW_STATE_DIR", "CREW_REPOS"):
         if os.environ.get(key):
@@ -158,7 +157,6 @@ CREW_WORKSPACE = "crew"
 
 
 def crew_workspace():
-    """The Herdr workspace the workers live in, apart from the owner's: found by label, created unfocused if missing."""
     listed = herdr("pane", "workspace", "list")
     for ws in (listed.get("result", {}).get("workspaces", []) if isinstance(listed, dict) else []):
         if ws.get("label") == CREW_WORKSPACE:
@@ -178,7 +176,6 @@ def my_pane(step):
 
 
 def find(obj, keys, allowed=None):
-    """First value under any of `keys`, anywhere in a JSON reply."""
     if isinstance(obj, dict):
         for k in keys:
             v = obj.get(k)
@@ -218,8 +215,6 @@ def file_state(path):
 
 
 def worker_view(meta):
-    """(state, agent): the state is idle, working or gone, what the worker's own Pi last wrote unless its pane is closed;
-    the agent is what Herdr detects in the pane (None when unknown)."""
     state = file_state(meta.get("state_file", "")).get("state", "starting")
     inside = os.environ.get("HERDR_ENV") == "1" or os.environ.get("CREW_HERDR_SESSION") or meta.get("host")
     agent = None
@@ -236,7 +231,6 @@ def worker_state(meta):
 
 
 def send(step, pane, text):
-    """Type one line into a pane and press Enter. Pi queues it when it is mid-turn."""
     herdr(step, "pane", "send-text", pane, " ".join(text.split()))
     time.sleep(0.5)
     herdr(step, "pane", "send-keys", pane, "enter")
@@ -460,7 +454,6 @@ BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=F
 
 
 def decisions():
-    """Every decision asked so far, folded from the append-only log: id -> record."""
     out = {}
     if os.path.exists(DECISIONS):
         with open(DECISIONS, encoding="utf-8") as f:
@@ -530,7 +523,6 @@ def first_line(text):
 
 
 def result_of(meta):
-    """The worker's own one-line result, from its report."""
     try:
         with open(meta["report"], encoding="utf-8") as f:
             text = f.read()
@@ -617,7 +609,6 @@ def cmd_board(a):
 
 
 def ensure_watcher():
-    """Open workers with nobody watching them: start the watcher, when this runs in a Herdr pane."""
     sync_remote()
     if workers() and not watcher_alive() and os.environ.get("HERDR_PANE_ID"):
         try:
@@ -635,6 +626,12 @@ def cmd_status(a):
                          report=meta["report"] if snap.get("report") else None, merged=snap.get("merged", False),
                          branch=meta["branch"], worktree=meta["worktree"], error=meta.get("error")))
     return dict(ok=True, workers=rows)
+
+
+def cmd_time(a):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import crew_painel
+    print(crew_painel.painel(workers(True), decisions(), STATE, a.fechados))
 
 
 def cmd_events(a):
@@ -876,6 +873,9 @@ def main():
     s = sub.add_parser("status", help="every open worker, with live state, report and merge")
     s.add_argument("--all", action="store_true", help="include closed workers")
     s.set_defaults(fn=cmd_status)
+    s = sub.add_parser("time", help="the team in one look: a line per worker, those needing attention first")
+    s.add_argument("--fechados", action="store_true", help="also the workers closed more than 12 hours ago")
+    s.set_defaults(fn=cmd_time)
     s = sub.add_parser("events", help="what changed since the last call")
     s.add_argument("--all", action="store_true", help="the whole log")
     s.set_defaults(fn=cmd_events)

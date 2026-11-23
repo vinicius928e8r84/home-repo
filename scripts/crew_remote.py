@@ -37,12 +37,11 @@ with open(os.path.join(os.path.dirname(state_file), "asks.jsonl"), "a", encoding
 print(json.dumps(dict(ok=True, next="keep working on everything that does not depend on this; the answer arrives as a [chief] message")))
 '''
 
-PULL_SCRIPT = '''import json
-import os
+PULL_SCRIPT = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "crew_sessao.py"), encoding="utf-8").read() + '''
 import sys
 
 out = {}
-for folder in sys.argv[1:]:
+for folder, worktree, started in zip(*[iter(sys.argv[2:])] * 3):
     item = {}
     for key, name in (("state", "state.json"), ("report", "report.md"), ("asks", "asks.jsonl")):
         try:
@@ -50,6 +49,7 @@ for folder in sys.argv[1:]:
                 item[key] = f.read()
         except OSError:
             item[key] = None
+    item["session"] = json.dumps(resumo(sys.argv[1], worktree, started))
     out[folder] = item
 print(json.dumps(out))
 '''
@@ -153,8 +153,8 @@ def register_asks(meta, text):
 
 
 def pull(host, group):
-    folders = " ".join(shlex.quote(m["remote_dir"]) for m in group)
-    pulled = json.loads(ssh(host, "python3 - " + folders, "sync", stdin=PULL_SCRIPT))
+    folders = " ".join(shlex.quote(word) for m in group for word in (m["remote_dir"], m["worktree"], m["started"]))
+    pulled = json.loads(ssh(host, 'python3 - "%s/pi-agent" %s' % (CREW_HOME, folders), "sync", stdin=PULL_SCRIPT))
     if not isinstance(pulled, dict):
         raise ValueError("not an object")
     return pulled
@@ -165,6 +165,8 @@ def mirror_worker(meta, item):
         mirror(meta["state_file"], item["state"])
     if item.get("report") is not None:
         mirror(meta["report"], item["report"])
+    if item.get("session") is not None:
+        mirror(os.path.join(crew.STATE, meta["name"], "session.json"), item["session"])
     register_asks(meta, item.get("asks"))
 
 
