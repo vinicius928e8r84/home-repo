@@ -1,226 +1,187 @@
 import contextlib
 import io
-import json
 import unittest
 
-from scripts.freios import catraca, principal
-from scripts.freios.apoio_de_teste import RepositorioTemporario, contexto_de_memoria
-from scripts.freios.contexto import PASTA, Achado, Entrada
+from scripts.freios import principal
+from scripts.freios.apoio_de_teste import RepositorioTemporario
 
 NL = chr(10)
-COM_COMENTARIOS = NL.join(["x = 1", "# um", "y = 2", "# dois", ""])
-COM_UM_COMENTARIO = NL.join(["x = 1", "# um", "y = 2", ""])
-SEM_COMENTARIOS = NL.join(["x = 1", "y = 2", ""])
+DOIS = NL.join(["x = 1", "# um", "y = 2", "# dois", ""])
+UM = NL.join(["x = 1", "# um", "y = 2", ""])
+TRES = NL.join(["x = 1", "# um", "y = 2", "# dois", "# tres", ""])
+LIMPO = NL.join(["x = 1", "y = 2", ""])
 
 
-def achados(arquivo, quantidade, verificacao="comentarios"):
-    return [Achado(verificacao, arquivo, "ruim", n + 1) for n in range(quantidade)]
+def bytes_de(quantidade):
+    return "a" * (quantidade - 1) + NL
 
 
-def aplicar(achados_da_verificacao, base, teto=None, **modo):
-    ctx = contexto_de_memoria({})
-    ctx.execucao = modo.get("execucao", "tudo")
-    ctx.alvos = [Entrada(c) for c in modo.get("alvos", ())]
-    return catraca.aplicar(ctx, "comentarios", achados_da_verificacao, ({"comentarios": base}, teto))
+def linhas_de(quantidade):
+    return NL.join(f"x{n} = {n}" for n in range(quantidade)) + NL
 
 
-class TesteDaComparacao(unittest.TestCase):
-    def test_arquivo_fora_da_linha_de_base_reprova(self):
-        falhas, divida = aplicar(achados("novo.py", 2), {})
-        self.assertEqual(len(falhas), 2)
-        self.assertEqual(divida, 0)
-
-    def test_arquivo_igual_a_linha_de_base_so_conta_como_divida(self):
-        falhas, divida = aplicar(achados("a.py", 3), {"a.py": 3})
-        self.assertEqual((falhas, divida), ([], 3))
-
-    def test_arquivo_que_piora_reprova(self):
-        falhas, _ = aplicar(achados("a.py", 4), {"a.py": 3})
-        self.assertEqual(len(falhas), 1)
-        self.assertIn("piorou: 4 contra 3", falhas[0].detalhe)
-
-    def test_arquivo_que_melhora_reprova_ate_atualizar_a_linha_de_base(self):
-        falhas, _ = aplicar(achados("a.py", 2), {"a.py": 3})
-        self.assertIn("melhorou de 3 para 2", falhas[0].detalhe)
-        self.assertIn("--atualizar-linha-de-base", falhas[0].detalhe)
-
-    def test_arquivo_limpo_ainda_listado_reprova(self):
-        falhas, _ = aplicar([], {"a.py": 3})
-        self.assertEqual([(f.arquivo, "não tem mais achados" in f.detalhe) for f in falhas], [("a.py", True)])
-
-    def test_no_commit_so_cobra_o_que_esta_no_commit(self):
-        base = {"a.py": 3, "b.py": 2}
-        self.assertEqual(aplicar([], base, execucao="commit", alvos=["a.py"])[0][0].arquivo, "a.py")
-        self.assertEqual(len(aplicar([], base, execucao="commit", alvos=["a.py"])[0]), 1)
-        self.assertEqual(aplicar([], base, execucao="commit", alvos=["c.py"])[0], [])
-
-    def test_achado_sem_arquivo_nunca_entra_na_linha_de_base(self):
-        solto = Achado("comentarios", "", "geral")
-        self.assertEqual(aplicar([solto], {})[0], [solto])
-
-    def test_medida_de_tamanho_nao_pode_crescer(self):
-        grande = Achado("tamanho", "a.md", "x", medida=21000)
-        ctx = contexto_de_memoria({})
-        ctx.alvos = []
-        ok, _ = catraca.aplicar(ctx, "tamanho", [grande], ({"tamanho": {"a.md": 21000}}, None))
-        pior, _ = catraca.aplicar(ctx, "tamanho", [grande], ({"tamanho": {"a.md": 20500}}, None))
-        self.assertEqual(ok, [])
-        self.assertIn("piorou: 21000 contra 20500", pior[0].detalhe)
-
-    def test_teto_de_linhas_e_de_bytes_do_mesmo_arquivo_sao_grupos_separados(self):
-        ambos = [
-            Achado("tamanho", "a.py", "bytes", medida=30000),
-            Achado("tamanho", "a.py", "linhas", medida=1200, grupo="a.py#linhas"),
-        ]
-        ctx = contexto_de_memoria({})
-        ctx.alvos = []
-        base = {"tamanho": {"a.py": 30000, "a.py#linhas": 1200}}
-        self.assertEqual(catraca.aplicar(ctx, "tamanho", ambos, (base, None)), ([], 2))
-
-    def test_linha_de_base_nao_cresce_em_relacao_a_base(self):
-        teto = {"comentarios": {"a.py": 3}}
-        self.assertEqual(aplicar(achados("a.py", 3), {"a.py": 3}, teto)[0], [])
-        subiu = aplicar(achados("a.py", 4), {"a.py": 4}, teto)[0]
-        self.assertIn("subiu de 3 para 4", subiu[0].detalhe)
-        entrou = aplicar(achados("b.py", 1), {"a.py": 3, "b.py": 1}, teto)[0]
-        self.assertTrue(any("entrou na linha de base" in f.detalhe for f in entrou))
-
-    def test_linha_de_base_pode_encolher_em_relacao_a_base(self):
-        teto = {"comentarios": {"a.py": 3, "b.py": 2}}
-        self.assertEqual(aplicar(achados("a.py", 2), {"a.py": 2}, teto)[0], [])
-
-    def test_leitura_recusa_formato_errado(self):
-        self.assertEqual(catraca.ler_linha_de_base('{"a": {"b.py": 2}}', "x"), {"a": {"b.py": 2}})
-        for ruim in ("[]", '{"a": []}', '{"a": {"b.py": 0}}', '{"a": {"b.py": "2"}}', "nao json"):
-            with self.subTest(ruim), self.assertRaises(ValueError):
-                catraca.ler_linha_de_base(ruim, "x")
-
-
-class TesteDoFluxoCompleto(unittest.TestCase):
+class BaseDosTestes(unittest.TestCase):
     def setUp(self):
         self.repo = RepositorioTemporario()
         self.addCleanup(self.repo.limpar)
-        self.repo.adicionar("a.py", COM_COMENTARIOS)
 
-    def rodar(self, *argumentos):
+    def na_main(self, arquivos):
+        for caminho, conteudo in arquivos.items():
+            self.repo.adicionar(caminho, conteudo)
+        self.repo.commitar("main")
+        self.repo.git("checkout", "-q", "-b", "feature")
+
+    def rodar(self, modo="--tudo", base="main"):
         saida = io.StringIO()
-        erro = io.StringIO()
-        with contextlib.redirect_stdout(saida), contextlib.redirect_stderr(erro):
-            codigo = principal.main([*argumentos, "--raiz", str(self.repo.raiz), "--sem-testes", "--tudo"])
-        return codigo, saida.getvalue() + erro.getvalue()
+        argumentos = [modo, "--base", base, "--raiz", str(self.repo.raiz), "--sem-testes"]
+        argumentos += ["--so", "tamanho", "--so", "comentarios"]
+        with contextlib.redirect_stdout(saida), contextlib.redirect_stderr(saida):
+            codigo = principal.main(argumentos)
+        return codigo, saida.getvalue()
 
-    def linha_de_base(self):
-        return json.loads((self.repo.raiz / catraca.ARQUIVO).read_text(encoding="utf-8"))
 
-    def versionar(self):
-        self.repo.git("add", "-A")
+class TesteDosComentarios(BaseDosTestes):
+    def test_encolher_passa_sem_editar_nada(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("a.py", UM)
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 0, saida)
+        self.assertIn("✓ comentarios (1 no teto da main)", saida)
 
-    def criar(self):
-        self.assertEqual(self.rodar("--criar-linha-de-base")[0], 0)
-        self.versionar()
+    def test_limpar_de_vez_passa(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("a.py", LIMPO)
+        self.assertEqual(self.rodar()[0], 0)
 
-    def test_sem_linha_de_base_a_divida_existente_reprova(self):
+    def test_ficar_igual_passa(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("b.py", LIMPO)
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 0, saida)
+        self.assertIn("(2 no teto da main)", saida)
+
+    def test_crescer_reprova(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("a.py", TRES)
         codigo, saida = self.rodar()
         self.assertEqual(codigo, 1)
-        self.assertIn("a.py:2", saida)
-
-    def test_criar_registra_a_divida_e_passa_a_so_avisar(self):
-        self.criar()
-        self.assertEqual(self.linha_de_base()["comentarios"], {"a.py": 2})
-        codigo, saida = self.rodar()
-        self.assertEqual(codigo, 0)
-        self.assertIn("✓ comentarios (2 na linha de base)", saida)
-
-    def test_criar_de_novo_nao_sobrescreve(self):
-        self.criar()
-        self.assertEqual(self.rodar("--criar-linha-de-base")[0], 1)
+        self.assertIn("a.py: piorou: 3 contra 2 na main", saida)
 
     def test_arquivo_novo_com_comentario_reprova(self):
-        self.criar()
-        self.repo.adicionar("novo.py", COM_UM_COMENTARIO)
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("novo.py", UM)
         codigo, saida = self.rodar()
         self.assertEqual(codigo, 1)
         self.assertIn("novo.py:2", saida)
 
-    def test_arquivo_que_piora_reprova(self):
-        self.criar()
-        self.repo.adicionar("a.py", COM_COMENTARIOS + "# tres" + NL)
+    def test_arquivo_novo_sem_comentario_passa(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("novo.py", LIMPO)
+        self.assertEqual(self.rodar()[0], 0)
+
+    def test_arquivo_que_nao_tinha_comentario_na_main_nao_pode_ganhar(self):
+        self.na_main({"a.py": LIMPO})
+        self.repo.adicionar("a.py", UM)
+        self.assertEqual(self.rodar()[0], 1)
+
+    def test_arquivo_movido_com_comentario_conta_como_novo(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.git("mv", "a.py", "b.py")
+        self.assertEqual(self.rodar()[0], 1)
+
+    def test_o_teto_e_o_do_ponto_em_que_a_branch_saiu_da_main(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.git("checkout", "-q", "main")
+        self.repo.adicionar("a.py", UM)
+        self.repo.commitar("main encolheu")
+        self.repo.git("checkout", "-q", "feature")
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 0, saida)
+
+    def test_arquivo_na_excecao_cresce_sem_barrar(self):
+        self.na_main({"scripts/crew.py": DOIS})
+        self.repo.adicionar("scripts/crew.py", TRES + "# quatro" + NL)
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 0, saida)
+
+    def test_sem_main_todo_achado_reprova_e_avisa(self):
+        self.na_main({"a.py": DOIS})
+        codigo, saida = self.rodar(base="origin/main")
+        self.assertEqual(codigo, 1)
+        self.assertIn("origin/main não existe aqui", saida)
+
+
+class TesteDoTamanho(BaseDosTestes):
+    def test_arquivo_grande_encolhendo_passa(self):
+        self.na_main({"grande.md": bytes_de(30000)})
+        self.repo.adicionar("grande.md", bytes_de(25000))
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 0, saida)
+        self.assertIn("✓ tamanho (1 no teto da main)", saida)
+
+    def test_arquivo_grande_crescendo_reprova(self):
+        self.na_main({"grande.md": bytes_de(30000)})
+        self.repo.adicionar("grande.md", bytes_de(30001))
         codigo, saida = self.rodar()
         self.assertEqual(codigo, 1)
-        self.assertIn("piorou: 3 contra 2", saida)
+        self.assertIn("piorou: 30001 contra 30000", saida)
 
-    def test_limpeza_exige_atualizar_e_depois_passa(self):
-        self.criar()
-        self.repo.adicionar("a.py", COM_UM_COMENTARIO)
-        self.assertEqual(self.rodar()[0], 1)
-        self.assertEqual(self.rodar("--atualizar-linha-de-base")[0], 0)
-        self.assertEqual(self.linha_de_base()["comentarios"], {"a.py": 1})
-        self.versionar()
+    def test_arquivo_novo_gordo_reprova(self):
+        self.na_main({"grande.md": bytes_de(30000)})
+        self.repo.adicionar("novo.md", bytes_de(20001))
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 1)
+        self.assertIn("novo.md: 20001 bytes", saida)
+
+    def test_arquivo_novo_dentro_do_teto_passa(self):
+        self.na_main({"grande.md": bytes_de(30000)})
+        self.repo.adicionar("novo.md", bytes_de(20000))
         self.assertEqual(self.rodar()[0], 0)
 
-    def test_limpeza_total_tira_o_arquivo_da_linha_de_base(self):
-        self.criar()
-        self.repo.adicionar("a.py", SEM_COMENTARIOS)
-        self.assertEqual(self.rodar("--atualizar-linha-de-base")[0], 0)
-        self.assertEqual(self.linha_de_base()["comentarios"], {})
-        self.versionar()
+    def test_teto_de_linhas_tem_a_propria_medida(self):
+        self.na_main({"grande.py": linhas_de(1200)})
+        self.repo.adicionar("grande.py", linhas_de(1100))
+        self.assertEqual(self.rodar()[0], 0)
+        self.repo.adicionar("grande.py", linhas_de(1201))
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 1)
+        self.assertIn("piorou: 1201 contra 1200", saida)
+
+    def test_encolher_em_bytes_nao_libera_crescer_em_linhas(self):
+        self.na_main({"grande.py": linhas_de(1200)})
+        mais_linhas_menos_bytes = NL.join("x" for _ in range(1300)) + NL
+        self.repo.adicionar("grande.py", mais_linhas_menos_bytes)
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 1)
+        self.assertIn("1300 contra 1200", saida)
+
+    def test_arquivo_na_excecao_cresce_sem_barrar(self):
+        self.na_main({"scripts/crew.py": linhas_de(1100)})
+        self.repo.adicionar("scripts/crew.py", linhas_de(1500))
         self.assertEqual(self.rodar()[0], 0)
 
-    def test_atualizar_recusa_subir_e_nao_grava_nada(self):
-        self.criar()
-        antes = (self.repo.raiz / catraca.ARQUIVO).read_text(encoding="utf-8")
-        self.repo.adicionar("a.py", COM_COMENTARIOS + "# tres" + NL)
-        self.repo.adicionar("novo.py", COM_UM_COMENTARIO)
-        codigo, saida = self.rodar("--atualizar-linha-de-base")
-        self.assertEqual(codigo, 1)
-        self.assertIn("nada foi atualizado", saida)
-        self.assertEqual((self.repo.raiz / catraca.ARQUIVO).read_text(encoding="utf-8"), antes)
 
-    def test_sem_linha_de_base_lista_toda_a_divida(self):
-        self.criar()
-        codigo, saida = self.rodar("--sem-linha-de-base")
-        self.assertEqual(codigo, 1)
-        self.assertIn("a.py:2", saida)
+class TesteDoPreCommit(BaseDosTestes):
+    def test_commit_que_encolhe_passa(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("a.py", UM)
+        self.assertEqual(self.rodar("--commit")[0], 0)
 
-    def test_criar_e_atualizar_pedem_tudo(self):
-        argumentos = ["--commit", "--criar-linha-de-base", "--raiz", str(self.repo.raiz)]
-        with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(principal.main(argumentos), 2)
+    def test_commit_que_cresce_e_barrado(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("a.py", TRES)
+        self.assertEqual(self.rodar("--commit")[0], 1)
 
-    def test_pre_commit_deixa_passar_a_divida_e_barra_o_arquivo_novo(self):
-        self.criar()
-        self.repo.commitar("base")
-        self.repo.adicionar("a.py", COM_COMENTARIOS + NL)
-        argumentos = ["--commit", "--raiz", str(self.repo.raiz)]
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(principal.main(argumentos), 0)
-            self.repo.adicionar("novo.py", COM_UM_COMENTARIO)
-            self.assertEqual(principal.main(argumentos), 1)
+    def test_commit_com_arquivo_novo_gordo_e_barrado(self):
+        self.na_main({"a.py": DOIS})
+        self.repo.adicionar("novo.md", bytes_de(20001))
+        self.assertEqual(self.rodar("--commit")[0], 1)
 
-    def test_linha_de_base_nao_cresce_em_relacao_a_base_da_branch(self):
-        self.criar()
-        self.repo.commitar("base")
-        self.repo.git("branch", "base-falsa")
-        self.repo.adicionar("b.py", COM_UM_COMENTARIO)
-        dados = self.linha_de_base()
-        dados["comentarios"]["b.py"] = 1
-        (self.repo.raiz / catraca.ARQUIVO).write_text(json.dumps(dados), encoding="utf-8")
-        self.versionar()
-        codigo, saida = self.rodar("--base", "base-falsa")
-        self.assertEqual(codigo, 1)
-        self.assertIn("b.py: entrou na linha de base", saida)
-
-
-class TesteDaConfiguracao(unittest.TestCase):
-    def test_as_verificacoes_com_linha_de_base_sao_as_aprovadas(self):
-        ctx = contexto_de_memoria({})
-        self.assertEqual(ctx.limites["linha_de_base"]["verificacoes"], ["tamanho", "comentarios", "skills", "links"])
-
-    def test_o_repo_tem_a_linha_de_base_versionada_e_valida(self):
-        texto = (PASTA / "linha-de-base.json").read_text(encoding="utf-8")
-        self.assertTrue(set(catraca.ler_linha_de_base(texto, "x")) <= {"tamanho", "comentarios", "skills", "links"})
+    def test_commit_so_cobra_o_que_esta_nele(self):
+        self.na_main({"a.py": DOIS, "b.py": DOIS})
+        self.repo.adicionar("b.py", UM)
+        self.assertEqual(self.rodar("--commit")[0], 0)
 
 
 if __name__ == "__main__":
     unittest.main()
-  

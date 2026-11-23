@@ -56,6 +56,15 @@ class TesteDeFerramentasExternas(unittest.TestCase):
         self.assertEqual(len(achados), 1)
         self.assertIn("não foi encontrado", achados[0].detalhe)
 
+    def test_sem_dependencias_instaladas_pula_e_diz_como_instalar(self):
+        self.configurar()
+        item = {**ferramenta("import sys; sys.exit(1)"), "instalado_em": "node_modules", "instalar": "npm ci"}
+        ctx = self.contexto([item])
+        self.assertEqual(externos.verificar(ctx), [])
+        self.assertIn("npm ci", ctx.avisos[0])
+        (self.raiz / "node_modules").mkdir()
+        self.assertEqual(len(externos.verificar(self.contexto([item]))), 1)
+
     def test_no_commit_recebe_so_os_arquivos_da_extensao(self):
         self.configurar()
         codigo = "import sys; print(sys.argv[1:]); sys.exit(1)"

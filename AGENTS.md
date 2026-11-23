@@ -12,7 +12,7 @@ Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesqu
 
 ## Freios
 
-`python scripts/freios/freios.py --commit` confere tamanho e comentários do que está no commit; `--tudo` confere o índice inteiro e os commits da branch. Cada verificação diz o conserto quando falha. O que já existia na `main` (comentários, arquivos grandes, skills e links) está em `scripts/freios/linha-de-base.json`: só avisa, e arquivo novo ou que piora reprova. Depois de uma limpeza, rode `--tudo --atualizar-linha-de-base` e versione o arquivo; ele só encolhe. Os tetos ficam em `limites.json` e as exceções, com motivo, em `excecoes.json`; mudar um deles é decisão do dono. Ligue os ganchos uma vez por clone com `git config core.hooksPath .githooks`.
+`python scripts/freios/freios.py --commit` confere tamanho e comentários do que está no commit; `--tudo` confere o índice inteiro e os commits da branch. Cada verificação diz o conserto quando falha. O teto de tamanho e de comentários de cada arquivo é a medida dele na `main` (calculada na hora, no ponto em que a branch saiu dela): encolher passa sem editar nada, crescer reprova e arquivo novo nasce dentro dos limites. Os tetos ficam em `limites.json` e as exceções, com motivo, num só arquivo, `excecoes.json` (que o ruff e o ESLint também leem); mudar um deles é decisão do dono. O ESLint pede `npm ci --prefix scripts/freios` uma vez; sem isso o freio avisa e pula. Ligue os ganchos uma vez por clone com `git config core.hooksPath .githooks`.
 
 ## Wiki
 

@@ -53,13 +53,24 @@ def ref_existe(raiz, ref):
     return resposta.returncode == 0
 
 
-def conteudo_na_ref(raiz, ref, caminho):
-    if not ref_existe(raiz, ref):
+def ponto_de_comparacao(raiz, base):
+    if not base or not ref_existe(raiz, base):
         return None
-    resposta = subprocess.run(
-        ["git", "cat-file", "blob", f"{ref}:{caminho}"], cwd=raiz, capture_output=True, check=False
-    )
-    return resposta.stdout.decode("utf-8") if resposta.returncode == 0 else None
+    resposta = subprocess.run(["git", "merge-base", "HEAD", base], cwd=raiz, capture_output=True, check=False)
+    if resposta.returncode == 0 and resposta.stdout.strip():
+        return resposta.stdout.decode("utf-8").strip()
+    return base
+
+
+def entradas_da_ref(raiz, ref):
+    saida = git(raiz, "ls-tree", "-r", "-z", ref).decode("utf-8", errors="replace")
+    entradas = []
+    for registro in filter(None, saida.split(chr(0))):
+        cabecalho, caminho = registro.split(chr(9), 1)
+        modo, tipo, sha = cabecalho.split(" ")
+        if tipo == "blob":
+            entradas.append(Entrada(caminho, modo, sha))
+    return entradas
 
 
 def commits_entre(raiz, base, cabeca):

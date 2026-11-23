@@ -201,7 +201,9 @@
         ".js",
         ".mjs",
         ".cjs"
-      ]
+      ],
+      "instalado_em": "scripts/freios/node_modules",
+      "instalar": "npm ci --prefix scripts/freios"
     }
   ],
   "funcoes": {
@@ -210,12 +212,10 @@
       ".py"
     ]
   },
-  "linha_de_base": {
+  "catraca": {
     "verificacoes": [
       "tamanho",
-      "comentarios",
-      "skills",
-      "links"
+      "comentarios"
     ]
   }
 }

@@ -14,6 +14,11 @@ def _configurada(ctx, ferramenta):
     return any((Path(ctx.raiz) / caminho).exists() for caminho in ferramenta["quando_existe"])
 
 
+def _instalada(ctx, ferramenta):
+    pasta = ferramenta.get("instalado_em")
+    return pasta is None or (Path(ctx.raiz) / pasta).exists()
+
+
 def _alvos(ctx, ferramenta):
     if ctx.execucao != "commit":
         return list(ferramenta["alvo_tudo"])
@@ -37,6 +42,9 @@ def _rodar(ctx, ferramenta, executavel, alvos):
 def _verificar_ferramenta(ctx, ferramenta):
     if not _configurada(ctx, ferramenta):
         ctx.avisos.append(f"{ferramenta['nome']}: ainda sem configuração no repositório, pulado")
+        return []
+    if not _instalada(ctx, ferramenta):
+        ctx.avisos.append(f"{ferramenta['nome']}: dependências não instaladas, pulado (rode {ferramenta['instalar']})")
         return []
     alvos = _alvos(ctx, ferramenta)
     if not alvos:

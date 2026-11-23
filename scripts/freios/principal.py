@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from scripts.freios import (
-    autoria, catraca, binario, comentarios, externos, funcoes, links, orcamento, segredo, sintaxe, skills, tamanho, testes,
+    autoria, binario, catraca, comentarios, externos, funcoes, links, orcamento, segredo, sintaxe, skills, tamanho, testes,
 )
 from scripts.freios.git import montar_contexto, raiz_do_repositorio
 
@@ -15,6 +15,7 @@ orçamento de contexto e autoria dos commits.
 
 --commit confere o tamanho e os comentários dos arquivos que estão no commit (gancho pre-commit).
 --tudo confere o índice inteiro, sem arquivo não rastreado, e os commits da branch contra --base (gancho pre-push e CI).
+Tamanho e comentários têm como teto a medida do arquivo na main (o ponto em que a branch saiu de --base): encolher passa, crescer reprova e arquivo novo nasce dentro dos limites.
 Sai com 0 quando tudo passa e com 1 quando alguma verificação falha."""
 LINHAS_POR_VERIFICACAO = 15
 
@@ -29,13 +30,6 @@ def ler_argumentos(argv):
     analisador.add_argument("--base", default="origin/main", help="ref contra a qual os commits são conferidos")
     analisador.add_argument("--so", action="append", default=[], metavar="ID", help="roda só esta verificação")
     analisador.add_argument("--completo", action="store_true", help="lista todos os achados, sem cortar")
-    analisador.add_argument("--criar-linha-de-base", action="store_true", help="cria a linha de base que ainda falta")
-    analisador.add_argument(
-        "--atualizar-linha-de-base", action="store_true", help="baixa a linha de base depois de uma limpeza (nunca sobe)"
-    )
-    analisador.add_argument(
-        "--sem-linha-de-base", action="store_true", help="ignora a linha de base e lista toda a dívida como falha"
-    )
     analisador.add_argument("--sem-testes", action="store_true", help="não roda python -m unittest discover")
     analisador.add_argument("--raiz", help="raiz do repositório (padrão: a do diretório atual)")
     return analisador.parse_args(argv)
@@ -71,36 +65,23 @@ def imprimir_falha(verificacao, achados, completo):
     print(f"  Conserto: {verificacao.CONSERTO}")
 
 
-def verificar_com_catraca(ctx, verificacao, linha_de_base):
+def verificar_com_catraca(ctx, verificacao):
     achados = verificacao.verificar(ctx)
-    if linha_de_base is None or verificacao.ID not in ctx.limites["linha_de_base"]["verificacoes"]:
-        return achados, 0
-    return catraca.aplicar(ctx, verificacao.ID, achados, linha_de_base)
+    if achados and verificacao.ID in ctx.limites["catraca"]["verificacoes"]:
+        return catraca.aplicar(ctx, verificacao, achados)
+    return achados, 0
 
 
-def executar(ctx, verificacoes, args):
-    linha_de_base = None if args.sem_linha_de_base else catraca.carregar(ctx)
+def executar(ctx, verificacoes, completo):
     falhas = []
     for verificacao in verificacoes:
-        achados, divida = verificar_com_catraca(ctx, verificacao, linha_de_base)
+        achados, divida = verificar_com_catraca(ctx, verificacao)
         if achados:
             falhas.append(verificacao)
-            imprimir_falha(verificacao, achados, args.completo)
+            imprimir_falha(verificacao, achados, completo)
         else:
-            print(f"✓ {verificacao.ID}" + (f" ({divida} na linha de base)" if divida else ""))
+            print(f"✓ {verificacao.ID}" + (f" ({divida} no teto da main)" if divida else ""))
     return falhas
-
-
-def mexer_na_linha_de_base(ctx, verificacoes, args):
-    if args.modo != "tudo":
-        print("--criar-linha-de-base e --atualizar-linha-de-base pedem --tudo", file=sys.stderr)
-        return 2
-    ratchet = ctx.limites["linha_de_base"]["verificacoes"]
-    resultados = {v.ID: v.verificar(ctx) for v in verificacoes if v.ID in ratchet}
-    mexer = catraca.criar if args.criar_linha_de_base else catraca.atualizar
-    codigo, mensagens = mexer(ctx, resultados)
-    print(chr(10).join(mensagens))
-    return codigo
 
 
 def main(argv=None):
@@ -113,10 +94,7 @@ def main(argv=None):
         return 2
     raiz = Path(args.raiz) if args.raiz else raiz_do_repositorio(Path.cwd())
     ctx = montar_contexto(raiz, args.modo, args.base)
-    verificacoes = verificacoes_do_modo(args)
-    if args.criar_linha_de_base or args.atualizar_linha_de_base:
-        return mexer_na_linha_de_base(ctx, verificacoes, args)
-    falhas = executar(ctx, verificacoes, args)
+    falhas = executar(ctx, verificacoes_do_modo(args), args.completo)
     for aviso in ctx.avisos:
         print(f"aviso: {aviso}")
     if falhas:

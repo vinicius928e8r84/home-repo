@@ -11,16 +11,32 @@
     {
       "glob": "yarn.lock",
       "motivo": "trava de pacotes gerada pelo yarn; ninguém a edita à mão"
+    },
+    {
+      "glob": "scripts/crew.py",
+      "motivo": "é o maior arquivo do repositório e o dono mandou deixá-lo de fora até ser dividido em módulos; esta exceção sai junto com a divisão"
     }
   ],
-  "comentarios": [],
+  "comentarios": [
+    {
+      "glob": "scripts/crew.py",
+      "motivo": "tem comentários e docstrings que o dono mandou deixar até o arquivo ser dividido; esta exceção sai junto com a divisão"
+    }
+  ],
   "sintaxe": [],
   "segredo": [],
   "binario": [],
   "funcoes": [
     {
       "glob": "scripts/crew.py",
-      "motivo": "tem funções acima do teto; outra tarefa o divide em módulos e esta exceção sai junto"
+      "motivo": "tem funções acima do teto; o dono mandou deixá-lo de fora até ser dividido em módulos; esta exceção sai junto com a divisão"
     }
-  ]
+  ],
+  "ruff": [
+    {
+      "glob": "scripts/crew.py",
+      "motivo": "tem funções acima dos limites de saúde; o dono mandou deixá-lo de fora até ser dividido em módulos; esta exclusão sai junto com a divisão e do extend-exclude do ruff.toml"
+    }
+  ],
+  "eslint": []
 }
