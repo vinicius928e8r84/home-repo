@@ -182,7 +182,7 @@ def main(a):
     if not a or a[0].startswith("-"):
         sys.exit(__doc__)
     domain = a[0].lower()
-    opt = dict(zip(a[1::2], a[2::2], strict=False))
+    opt = dict(zip(a[1::2], a[2::2]))
 
     ensure_zone(domain, opt.get("--confirm-price"))
     profile, ip = find_vps(opt)

@@ -60,13 +60,13 @@ export default [
     rules: { ...correcao, ...saude },
   },
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.mts', '**/*.cts'],
     languageOptions: { parser: tsParser, ecmaVersion: 'latest', sourceType: 'module', globals: globals.node },
     linterOptions: opcoes,
     rules: { ...correcao, ...saude },
   },
   {
-    files: ['.pi/extensions/**/*.ts'],
+    files: ['.pi/extensions/**/*.ts', '.pi/extensions/**/*.mts'],
     rules: extensoesDoPi,
   },
 ];
