@@ -1,6 +1,6 @@
 """crew: start, watch and talk to worker agents from the Home Repo.
 
-Each worker is a Pi agent in its own Herdr pane, working in its own git
+Each worker is a Pi agent in its own Herdr tab, working in its own git
 worktree, started with written instructions (the brief). Run this from the
 chief's pane inside Herdr.
 
@@ -10,7 +10,7 @@ chief's pane inside Herdr.
   python scripts/crew.py tell <name> "message"
   python scripts/crew.py read <name>
   python scripts/crew.py close <name>
-  python scripts/crew.py watch          (opens the watcher pane)
+  python scripts/crew.py watch          (opens the watcher tab)
 
 Repos come from repos.json, models from model_routing.json. Every command
 prints JSON; a failure prints {"ok": false, "step": ..., "error": ...} and
@@ -27,7 +27,7 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE = os.path.join(ROOT, "state", "crew")
+STATE = os.environ.get("CREW_STATE_DIR") or os.path.join(ROOT, "state", "crew")  # the override isolates tests
 EVENTS = os.path.join(STATE, "events.jsonl")
 CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
@@ -50,7 +50,7 @@ def posix(path):
 
 
 def load(name):
-    path = os.path.join(ROOT, name)
+    path = os.environ.get("CREW_REPOS") if name == "repos.json" and os.environ.get("CREW_REPOS") else os.path.join(ROOT, name)
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
@@ -81,6 +81,15 @@ def herdr(step, *args):
         return json.loads(text)
     except ValueError:
         return text
+
+
+def passthrough():
+    """--env flags that carry the test overrides into a tab this script opens."""
+    out = []
+    for key in ("CREW_STATE_DIR", "CREW_REPOS"):
+        if os.environ.get(key):
+            out += ["--env", "%s=%s" % (key, os.environ[key])]
+    return out
 
 
 def my_pane(step):
@@ -272,8 +281,8 @@ def cmd_spawn(a):
         f.write(BRIEF.format(request=request, home=posix(ROOT), **meta))
     write_meta(meta)
     try:
-        pane = find(herdr("pane", "pane", "split", my_pane("pane"), "--direction", "right", "--cwd", worktree, "--no-focus",
-                          "--env", "CREW_STATE_FILE=" + meta["state_file"]), ("pane_id",))
+        pane = find(herdr("pane", "tab", "create", "--workspace", my_pane("pane").split(":")[0], "--cwd", worktree, "--label", name, "--no-focus",
+                          "--env", "CREW_STATE_FILE=" + meta["state_file"], "--env", "CREW_AGENT_NAME=" + name, *passthrough()), ("pane_id",))
         if not pane:
             raise Fail("pane", "Herdr did not return a pane id")
         meta["pane"] = pane
@@ -383,7 +392,7 @@ def describe(event):
 def cmd_watch(a):
     if not a.chief:
         chief = my_pane("watch")
-        pane = find(herdr("pane", "pane", "split", chief, "--direction", "down", "--cwd", ROOT, "--no-focus"), ("pane_id",))
+        pane = find(herdr("pane", "tab", "create", "--workspace", chief.split(":")[0], "--cwd", ROOT, "--label", "crew-watch", "--no-focus", *passthrough()), ("pane_id",))
         if not pane:
             raise Fail("watch", "Herdr did not return a pane id for the watcher")
         herdr("watch", "pane", "run", pane, "python scripts/crew.py watch --chief %s --every %d --stall %d" % (chief, a.every, a.stall))
