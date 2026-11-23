@@ -12,7 +12,7 @@ Um skill entra aqui quando vale para todos os repos e custa quase zero contexto:
 
 ## Outros repos
 
-Antes de trabalhar em um deles, rode `git pull` (o clone local fica atrás do GitHub) e leia o AGENTS.md dele.
+Antes de trabalhar em um deles, rode `git pull` (o clone local fica atrás do GitHub) e leia o AGENTS.md dele. Os skills de um repo não carregam aqui: quando a tarefa pedir um, leia o `SKILL.md` dele em `.claude/skills/<nome>/` como arquivo e siga-o.
 
 - Nova-AI (port do Nova AI para macOS + iPhone, em Electron): `~/Nova-AI`. Clone de https://github.com/vinicius928e8r84/Nova-AI se faltar.
 - PerpetualMiner (extensão Chrome que minera frases e as envia ao Anki): `~/PerpetualMiner`. Clone de https://github.com/vinicius928e8r84/PerpetualMiner se faltar.
