@@ -6,7 +6,7 @@ Este documento é só o plano. Parte da `main` em `fbc296c` (`crew.py` com 943 l
 
 ## O que foi medido
 
-- Sessões do Pi em `~/.pi/agent/sessions/<cwd codificado>/<data>_<id>.jsonl`. Cada resposta do modelo é uma linha `message` com `role: assistant`, `model`, `thinkingLevel`, `usage` (`input`, `output`, `cacheRead`, `cacheWrite`, `cost`), `stopReason` e, no erro, `errorMessage`. Ler as 114 sessões desta máquina (46 MB) leva 0,18 s: sem leitura incremental.
+- Sessões do Pi em `~/.pi/agent/sessions/<cwd codificado>/<data>_<id>.jsonl`. Cada resposta do modelo é uma linha `message` com `role: assistant`, `model`, `thinkingLevel`, `usage` (`input`, `output`, `cacheRead`, `cacheWrite`, `cost`), `stopReason` e, no erro, `errorMessage`. Ler as 114 sessões (46 MB) leva 0,18 s: sem leitura incremental.
 - O tamanho do contexto agora é o `usage` da última resposta: `input + cacheRead + cacheWrite + output`. É o cálculo do `ctx.getContextUsage()` do Pi.
 - Pelo claude-bridge, o `cost` vem zerado (`totalFromProvider: false`).
 - Cada compactação é uma linha `compaction` na sessão, com hora e `tokensBefore`.
@@ -21,9 +21,9 @@ Este documento é só o plano. Parte da `main` em `fbc296c` (`crew.py` com 943 l
 
 1. O painel só lê arquivos. Quem chama `herdr`, `git` e `gh` é o vigia, que grava o que viu; o painel lê em menos de 1 s com 45 workers.
 2. Números vêm de dado estruturado (sessão do Pi, `meta.json`, `state.json`, catálogo do Pi), nunca da tela.
-3. Tudo determinístico vai para Python com teste, cada módulo novo com o seu arquivo (`test_crew_conversa.py`, `test_crew_painel.py`, `test_crew_metricas.py`…): o `test_crew.py` está em 19.999 bytes, perto do teto de 20.000, e fora de `excecoes.json`. O skill do chief guarda só o que não dá para checar.
+3. Tudo determinístico vai para Python com teste, cada módulo novo com o seu arquivo (`test_crew_conversa.py`, `test_crew_painel.py`…): o `test_crew.py` tem 19.999 bytes. O skill do chief guarda só o que não dá para checar.
 4. Não duplicar a frota durável: o painel mostra os estados que ela cria ("PAROU por X", "em risco: X"); não os detecta de novo.
-5. Código novo nasce em módulos (`crew_painel.py` e afins), como o `crew_remote.py` da PR #11: o `crew.py` está em `excecoes.json` até ser dividido (D49), então nenhum freio o barra se crescer, e é por isso que o código novo vai para módulo: o `crew.py` só ganha a ligação e perde o que migra.
+5. Código novo nasce em módulos (`crew_painel.py` e afins), como o `crew_remote.py` da PR #11: o `crew.py` está em `excecoes.json` até ser dividido (D49) e nenhum freio o barra se crescer: o código novo vai para módulo e o `crew.py` só ganha a ligação.
 
 ## 1. Painel do time: `crew.py time`
 
@@ -42,7 +42,7 @@ Uma linha por worker, quem precisa de atenção no topo. O nome `time` é do don
 | marca | estado | `!` erro, parou ou parado; `?` espera alguém; vazio rodando ou ocioso; `-` fechado |
 | nome, repo, tipo | `meta.json` (`name`, `repo`, `type`) | — |
 | modelo e esforço | última resposta da sessão (`model`, `thinkingLevel`); sem resposta ainda, `meta.json` (`model`, `thinking`) | nome do catálogo do Pi sem "Claude ": "Opus 5.5 medium". Modelo fora do catálogo aparece com o id inteiro |
-| contexto | `usage` da última resposta; janela e limiar de compactação do catálogo e do `settings.json` (o do worktree sobre o global) | "faltam 61k até compactar" (D56). Depois de uma compactação, até a próxima resposta, "compactou às HH:MM" |
+| contexto | `usage` da última resposta; janela e limiar de compactação do catálogo e do `settings.json` (o do worktree sobre o global) | "faltam 61k até compactar" (D56). Depois de compactar, até a próxima resposta, "compactou às HH:MM" |
 | compactações | linhas `compaction` das sessões do worker | "2 compactações (11:40, 13:05)"; nada quando não houve |
 | estado | `state.json`, decisões e perguntas abertas, estados da frota PR 2, `stalled` do último `watch.json` | um só, nesta ordem: ERRO (com os primeiros 60 caracteres da mensagem), PAROU por X, parado há N min, espera dono (título da Decisão), espera chief (título da Pergunta), trabalhando, ocioso há N |
 | abriu, fechou, turno | `meta.json` (`started`, `closed`); `state.json` (`at` do último `working`) | horário local HH:MM; "turno N min" só trabalhando |
@@ -81,7 +81,7 @@ O vigia acorda o chief (seção 4) ao passar de 80% em qualquer janela e ao cheg
 
 Ao fechar um worker (`close`), o `crew.py` grava uma linha em `state/crew/metricas.jsonl`:
 
-`worker`, `repo`, `tarefa`, `tipo`, `modelo`, `esforco`, `abriu`, `fechou`, `minutos_trabalhando`, `turnos`, `tokens` (`entrada`, `saida`, `cache_lido`, `cache_escrito`), `compactacoes` (a hora e o `tokensBefore` de cada uma), `pr`, `categoria`, `atencao`, `mesclada`, `sessoes`. Este worker, no meio do plano: 46 de entrada, 14.860 de saída, 1.179.416 de cache lido, 86.811 de cache escrito.
+`worker`, `repo`, `tarefa`, `tipo`, `modelo`, `esforco`, `abriu`, `fechou`, `minutos_trabalhando`, `turnos`, `tokens` (`entrada`, `saida`, `cache_lido`, `cache_escrito`), `compactacoes` (a hora e o `tokensBefore` de cada uma), `pr`, `categoria`, `atencao`, `mesclada`, `sessoes`.
 
 - Tokens: soma do `usage` de todas as respostas das sessões do worker, compactações incluídas.
 - Custo não se grava (D57): sai depois dos tokens.
@@ -102,12 +102,12 @@ Cada PR diz o propósito numa linha do corpo, separada da atenção:
 **Categoria:** conserto
 ```
 
-Valores, lista provisória (D58; o dono fará a definitiva): `freio` (regra, lint, check, guarda), `conserto`, `recurso` (recurso novo), `limpeza`, `refatoração`, `plano` (plano ou documento), `pesquisa`. Uma só por PR; uma PR que é duas coisas vira duas PRs.
+Valores, lista provisória (D58; o dono fará a definitiva): `freio` (regra, lint, check, guarda), `conserto`, `recurso` (recurso novo), `limpeza`, `refatoração`, `plano` (plano ou documento), `pesquisa`. Uma por PR; duas coisas, duas PRs.
 
-- A lista mora num lugar só, `scripts/freios/categorias.json`; o Registro, o template e as métricas a leem dali. Trocar a lista é editar esse arquivo, que vale depois de mesclado (o Registro roda as regras da base).
-- O check Registro da PR (PR #14, `scripts/freios/registro_da_pr.py`) passa a exigir uma única linha `Categoria:` com um desses valores, pelo mesmo caminho da linha `Atenção:` (`valores_de`, sem caixa e sem acento). Falta ou valor fora da lista: o check falha dizendo os valores válidos.
+- A lista mora num lugar só, `scripts/freios/categorias.json`; o Registro e as métricas a leem dali (o template só aponta para ele). Trocar a lista é editar esse arquivo; vale depois de mesclado, pois o Registro roda as regras da base.
+- O check Registro da PR (PR #14, `scripts/freios/registro_da_pr.py`) passa a exigir uma única linha `Categoria:` com um desses valores, como a linha `Atenção:` (`valores_de`, sem caixa nem acento). Sem ela, ou com valor fora da lista, o check falha e diz os válidos.
 - `.github/PULL_REQUEST_TEMPLATE.md` ganha `**Categoria:**` abaixo de `**Atenção:**`, e o comentário aponta para o `categorias.json`.
-- Como o Registro roda as regras da base, a exigência só vale para PRs abertas depois de mesclada; a própria PR que a cria ainda passa sem ela.
+- A exigência só vale para PRs abertas depois de mesclada; a própria PR que a cria passa sem ela.
 - Sem rótulo do GitHub (D58).
 
 ## 4. Supervisão filtrada
@@ -149,7 +149,6 @@ Uma página fixa, `state/crew/decisoes/index.html`, refeita pelo `crew.py` a cad
 - O dono marca uma opção ou escreve em cada cartão que quiser e clica "Enviar respostas" uma vez. A página segue o playbook `input` do lavish.
 - Quem recebe: o vigia mantém um `lavish-axi poll` da página como processo filho e lê a saída a cada rodada. Cada resposta vira `answer Dn "..."` (gravada e entregue ao worker, como hoje) e o chief é acordado com uma linha por Decisão respondida, com o título. Com o vigia parado, as respostas esperam na fila do lavish.
 - Aberta uma vez com `npx -y lavish-axi state/crew/decisoes/index.html`; o link vai no chat e no bloco "Suas decisões".
-- Sem aviso no celular.
 
 A conferir no começo da PR, antes de escrever o resto: se o lavish recarrega a página quando o arquivo muda, e se "Send & End" encerra a sessão de vez (o botão da página precisa ser "Enviar", não "Encerrar"). Se não recarregar, a página faz a própria leitura de um `decisoes.json` ao lado a cada 30 s.
 
@@ -165,7 +164,7 @@ O que dá para fazer em código vai para o código: o bloco "Suas decisões" do 
 
 ## 8. Ordem das PRs
 
-Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro agente e Prova real. A divisão do `crew.py` não é pré-requisito: o arquivo está em `excecoes.json` até ser dividido, e o código novo nasce em módulo sem esperá-la. Se o dono quiser a divisão antes, ela precisa de uma tarefa própria.
+Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro agente e Prova real. A divisão do `crew.py` não é pré-requisito; se o dono a quiser antes, ela é outra tarefa.
 
 | # | PR | Mexe em | Depende de | Teste |
 |---|---|---|---|---|
@@ -178,7 +177,7 @@ Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro ag
 | 7 | Fila de decisões do dono na página lavish e respostas pelo vigia | `crew_decisoes.py`, `crew.py` | 1, 5 | saída de `poll` gravada vira `answer` e aviso ao chief; Prova real: uma rodada com o dono |
 | 8 | Métricas: linha no `close`, `metricas`, `--recolher` | `crew_metricas.py`, `crew.py` | 2, 6 | sessões de exemplo: somas e compactações batem com a conta à mão |
 
-Com a frota durável, a ordem sugerida é: painel 1 → painel 2 → painel 3 → frota 1 → frota 2 → painel 4 → painel 5 → painel 6 (assim que a #14 entrar) → frota 3 a 9 e painel 7 e 8, intercalados. Painel 5 e frota 2 mexem no mesmo `notify`; quem vier depois rebaseia. O aviso de cota da PR 3 entra direto como motivo de acordar, sem esperar a PR 5.
+Com a frota durável, a ordem sugerida é: painel 1 → painel 2 → painel 3 → frota 1 → frota 2 → painel 4 → painel 5 → painel 6 → frota 3 a 9 e painel 7 e 8, intercalados. Painel 5 e frota 2 mexem no mesmo `notify`; quem vier depois rebaseia. O aviso de cota da PR 3 entra direto como motivo de acordar, sem esperar a PR 5.
 
 ## O que pode ser cortado
 
@@ -194,7 +193,7 @@ O essencial são as PRs 1, 2 e 5: o worker fala com o chief, o chief vê o time 
 
 ## Decisões do dono
 
-Registradas com `crew.py ask`, todas respondidas:
+Todas respondidas pelo dono:
 
 1. **Contexto: contar até a compactação ou até a janela** (D56) — decidida: até a compactação, e marcar quantas compactações houve e quando, no painel e nas métricas.
 2. **Custo: estimar pelo preço da API** (D57) — decidida: não; só tokens, e o custo se calcula depois.
