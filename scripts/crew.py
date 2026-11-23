@@ -96,6 +96,22 @@ def passthrough():
     return out
 
 
+CREW_WORKSPACE = "crew"
+
+
+def crew_workspace():
+    """The Herdr workspace the workers live in, apart from the owner's: found by label, created unfocused if missing."""
+    listed = herdr("pane", "workspace", "list")
+    for ws in (listed.get("result", {}).get("workspaces", []) if isinstance(listed, dict) else []):
+        if ws.get("label") == CREW_WORKSPACE:
+            return ws["workspace_id"]
+    made = herdr("pane", "workspace", "create", "--label", CREW_WORKSPACE, "--cwd", ROOT, "--no-focus")
+    ws = find(made, ("workspace_id",))
+    if not ws:
+        raise Fail("pane", "Herdr did not return the id of the `%s` workspace" % CREW_WORKSPACE)
+    return ws
+
+
 def my_pane(step):
     pane = os.environ.get("HERDR_PANE_ID")
     if not pane:
@@ -285,7 +301,7 @@ def cmd_spawn(a):
         f.write(BRIEF.format(request=request, home=posix(ROOT), **meta))
     write_meta(meta)
     try:
-        pane = find(herdr("pane", "tab", "create", "--workspace", my_pane("pane").split(":")[0], "--cwd", worktree, "--label", name, "--no-focus",
+        pane = find(herdr("pane", "tab", "create", "--workspace", crew_workspace(), "--cwd", worktree, "--label", name, "--no-focus",
                           "--env", "CREW_STATE_FILE=" + meta["state_file"], "--env", "CREW_AGENT_NAME=" + name, *passthrough()), ("pane_id",))
         if not pane:
             raise Fail("pane", "Herdr did not return a pane id")
