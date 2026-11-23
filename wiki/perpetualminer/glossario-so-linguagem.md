@@ -14,3 +14,19 @@ Fonte: o grilling de 2026-11-23 com o dono (páginas lavish `.lavish/pm-glossari
 - Princípio do dono para toda a documentação: apagar o que é duplicado, sedimento ou no-op. O CODING_STANDARDS deve guardar só as regras que nenhuma lint rule ou trava já garante. "O contexto da arquitetura é a própria codebase." O inventário está com o worker `pm-docs-inventario`.
 
 Relacionada: [campanha da nota 10](campanha-nota-10.md). Nenhuma mudança de comportamento entra enquanto a campanha durar.
+
+## Decidido em 2026-11-23, rodada 2
+
+- **Termo** substitui Palavra: é o que o Cartão ensina, com uma ou mais palavras. "palavra" passa a ser só a palavra solta. Evitar: palavra-chave, keyword.
+- **Frase**: o texto que a pessoa minerou, guardado no Histórico com o seu Idioma e o seu Contexto. Qualquer tamanho conta, e o que ainda não foi minerado não é Frase.
+- A Exportada sai do glossário e ganha uma issue para decidir, depois da campanha, se o recurso .txt sai do produto.
+- Tipo de nota sai do glossário. Contra a recomendação do chief, que era manter o nome do Anki.
+- Ficam como nomes de tela Painel, Boas-vindas, Minerar de uma foto, Ajustes de envio e IA dos cartões. Custos sai. Nas palavras do dono, "o glossary tem que espelhar no código e na experiência".
+- O ADR 0001 diz que nome novo no código segue o glossário. Os nomes antigos viram issues de renomeação depois da campanha.
+- A regra `glossario-so-linguagem` reprova crase, a linha `_Nome no código_` e definição com mais de duas frases.
+- O que sai do glossário não vai para nenhum outro doc.
+
+## Achados (2026-11-23)
+
+- Os dois arquivos foram para `docs/` pelo próprio dono no commit `vinicius928e8r84/PerpetualMiner@fbdcee51` (19/11). Esse commit também criou `scripts/ci/test_docs_fora_da_raiz.js`, que reprova se os arquivos estiverem na raiz. A mensagem do commit não dá o motivo. Pergunta Q15 da rodada 3.
+- O inventário dos `.md` foi feito pelo worker `pm-docs-inventario` (relatório em `state/crew/pm-docs-inventario/report.md`; inventário em `pi/docs-inventario@cc92a1ca`, `docs-inventario.md`). Ver [dieta dos .md](dieta-dos-md.md).
