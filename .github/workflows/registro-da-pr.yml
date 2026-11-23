@@ -34,11 +34,14 @@ jobs:
           if git cat-file -e "origin/$BASE:scripts/freios/registro_da_pr.py" 2>/dev/null; then
             mkdir -p "$RUNNER_TEMP/freios-da-base"
             git archive "origin/$BASE" scripts/freios | tar -x -C "$RUNNER_TEMP/freios-da-base"
-            echo "FREIOS_DIR=$RUNNER_TEMP/freios-da-base/scripts/freios" >> "$GITHUB_ENV"
+            echo "FREIOS_RAIZ=$RUNNER_TEMP/freios-da-base" >> "$GITHUB_ENV"
           else
-            echo "FREIOS_DIR=$GITHUB_WORKSPACE/scripts/freios" >> "$GITHUB_ENV"
+            echo "FREIOS_RAIZ=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
           fi
-      - run: python "$FREIOS_DIR/registro_da_pr.py"
+      - name: Registro da PR
+        run: |
+          cd "$FREIOS_RAIZ"
+          python -m scripts.freios.registro_da_pr
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}

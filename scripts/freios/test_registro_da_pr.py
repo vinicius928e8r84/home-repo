@@ -1,6 +1,6 @@
 import unittest
 
-from registro_da_pr import (
+from scripts.freios.registro_da_pr import (
     CAMINHOS_SENSIVEIS,
     Pr,
     caminhos_sensiveis,
@@ -9,7 +9,7 @@ from registro_da_pr import (
     marca_de_prova_parcial,
     risco_do_revisor,
 )
-from registro_texto import linhas_que_valem
+from scripts.freios.registro_texto import linhas_que_valem
 
 HEAD = "a" * 40
 OUTRO = "b" * 40

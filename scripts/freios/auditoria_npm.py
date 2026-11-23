@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import saida_utf8
+from scripts.freios import saida_utf8
 
 NIVEIS = ("high", "critical")
 VAZIO = "0" * 40

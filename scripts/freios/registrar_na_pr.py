@@ -5,9 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import saida_utf8
-from github_api import Cliente, ErroDoGitHub, ler_pr
-from registro_da_pr import (
+from scripts.freios import saida_utf8
+from scripts.freios.github_api import Cliente, ErroDoGitHub, ler_pr
+from scripts.freios.registro_da_pr import (
     ATENCOES,
     FRASE,
     SECAO_DA_PROVA,
@@ -17,7 +17,7 @@ from registro_da_pr import (
     falta_da_prova,
     falta_da_revisao,
 )
-from registro_texto import SHA_INTEIRO, fim_da_secao, indice_da_secao, linhas_do_corpo, sem_caixa_nem_acento
+from scripts.freios.registro_texto import SHA_INTEIRO, fim_da_secao, indice_da_secao, linhas_do_corpo, sem_caixa_nem_acento
 
 PROVA_PARCIAL = "BLOQUEADA-parcial"
 RISCOS = {sem_caixa_nem_acento(atencao): atencao for atencao in ATENCOES}
@@ -29,7 +29,7 @@ DESCRICAO = (
 
 
 def ler_argumentos(argv):
-    analisador = argparse.ArgumentParser(prog="registrar_na_pr.py", description=DESCRICAO)
+    analisador = argparse.ArgumentParser(prog="python -m scripts.freios.registrar_na_pr", description=DESCRICAO)
     analisador.add_argument("comando", choices=["conferir", "revisao", "prova"])
     analisador.add_argument("--pr", required=True, help="número da PR")
     analisador.add_argument("--head", help="SHA inteiro do commit revisado ou provado")

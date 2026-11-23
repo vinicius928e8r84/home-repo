@@ -34,7 +34,7 @@ O que está em comentário de HTML, em bloco de código ou em citação (>) não
    Vale o registro mais recente com o head exato. Um commit novo muda o head: revise de novo. Se o revisor registrar
    Risco: ALTA, a PR conta como ALTA mesmo com o corpo dizendo BAIXA ou MÉDIA. Um registro publicado como comentário
    simples não roda o check de novo; publique como revisão:
-   python scripts/freios/registrar_na_pr.py revisao --pr <número> --head <SHA> --autor <quem> --revisor <quem> --risco baixa|media|alta --publicar
+   python -m scripts.freios.registrar_na_pr revisao --pr <número> --head <SHA> --autor <quem> --revisor <quem> --risco baixa|media|alta --publicar
 
 4. Prova real, com atenção ALTA: a seção abaixo, com uma única linha Head: com o SHA inteiro e uma explicação de pelo menos
    40 caracteres do que foi rodado de verdade e do que apareceu. NÃO COBERTO e BLOQUEADA invalidam a seção.
@@ -46,7 +46,7 @@ O que está em comentário de HTML, em bloco de código ou em citação (>) não
 
    <o que você rodou e o que apareceu>
 
-   python scripts/freios/registrar_na_pr.py prova --pr <número> --head <SHA> --cobertura total --nota <arquivo> --publicar
+   python -m scripts.freios.registrar_na_pr prova --pr <número> --head <SHA> --cobertura total --nota <arquivo> --publicar
    escreve a seção com o head lido no GitHub.
 
 O check confere o artefato e o SHA, não que a revisão ou a prova aconteceram.

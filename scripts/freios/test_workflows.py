@@ -2,8 +2,8 @@ import re
 import unittest
 from pathlib import Path
 
-from registro_da_pr import Pr, conferir
-from test_registro_da_pr import HEAD, REPO, revisao
+from scripts.freios.registro_da_pr import Pr, conferir
+from scripts.freios.test_registro_da_pr import HEAD, REPO, revisao
 
 RAIZ = Path(__file__).resolve().parents[2]
 WORKFLOWS = RAIZ / ".github" / "workflows"
@@ -49,8 +49,26 @@ class WorkflowFreios(unittest.TestCase):
         self.assertRegex(self.texto, r"(?m)^  push:\n    branches: \[main\]$")
 
     def test_roda_o_comando_unico_dos_freios_e_os_testes(self):
-        self.assertIn("run: python scripts/freios/freios.py --tudo", self.texto)
-        self.assertIn('python -m unittest discover -s scripts/freios -p "test_*.py"', self.texto)
+        self.assertIn("python scripts/freios/freios.py --tudo 2>&1 | tee", self.texto)
+        self.assertIn("run: python -m unittest discover\n", self.texto)
+
+    def test_instala_ruff_e_as_dependencias_do_eslint_antes_dos_freios(self):
+        antes = self.texto[: self.texto.index("- name: Freios\n")]
+        self.assertIn("python -m pip install --disable-pip-version-check -r scripts/freios/requirements.txt", antes)
+        self.assertIn("npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/freios", antes)
+        self.assertNotIn("if [ -f scripts/freios/package-lock.json ]", self.texto)
+
+    def test_falha_se_alguma_ferramenta_for_pulada_e_olha_as_duas_saidas(self):
+        self.assertIn('python -m scripts.freios.sem_pulo "$RUNNER_TEMP"/freios*.txt', self.texto)
+        self.assertIn('tee "$RUNNER_TEMP/freios.txt"', self.texto)
+        self.assertIn('tee "$RUNNER_TEMP/freios-da-pr.txt"', self.texto)
+        self.assertEqual(self.texto.count("set -o pipefail"), 2)
+
+    def test_a_pr_tambem_roda_os_freios_nos_arquivos_dela_com_as_dependencias_dela(self):
+        trecho = self.texto[self.texto.index("Voltar aos freios da PR"): self.texto.index("Nenhuma ferramenta pulada")]
+        self.assertIn("npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/freios", trecho)
+        self.assertIn("python scripts/freios/freios.py --tudo --sem-testes", trecho)
+        self.assertEqual(trecho.count("env.FREIOS_DA_BASE == '1'"), 3)
 
     def test_a_pr_roda_os_freios_da_base_e_depois_volta_aos_da_pr(self):
         self.assertIn('git cat-file -e "origin/$BASE:scripts/freios/freios.py"', self.texto)
@@ -58,7 +76,16 @@ class WorkflowFreios(unittest.TestCase):
         self.assertIn("git checkout -- scripts/freios", self.texto)
 
     def test_a_ordem_e_base_depois_ferramentas_depois_freios_depois_testes(self):
-        passos = ["Usar os freios da base", "Instalar as ferramentas", "- name: Freios\n", "Voltar aos freios da PR", "Testes dos freios"]
+        passos = [
+            "Usar os freios da base",
+            "Instalar ruff e ESLint\n",
+            "- name: Freios\n",
+            "Voltar aos freios da PR",
+            "Instalar ruff e ESLint da PR",
+            "Freios nos arquivos da PR",
+            "Nenhuma ferramenta pulada",
+            "- name: Testes",
+        ]
         posicoes = []
         for passo in passos:
             posicoes.append(self.texto.index(passo, posicoes[-1] + 1 if posicoes else 0))
@@ -70,7 +97,8 @@ class WorkflowFreios(unittest.TestCase):
 
     def test_job_da_auditoria_roda_a_auditoria_da_base_contra_a_base_da_mudanca(self):
         self.assertIn("name: Auditoria de dependências", self.texto)
-        self.assertIn('auditoria_npm.py" --raiz "$GITHUB_WORKSPACE" --base "$BASE_SHA"', self.texto)
+        self.assertIn('python -m scripts.freios.auditoria_npm --raiz "$GITHUB_WORKSPACE" --base "$BASE_SHA"', self.texto)
+        self.assertIn('cd "$FREIOS_RAIZ"', self.texto)
         self.assertIn("github.event.pull_request.base.sha || github.event.before", self.texto)
 
     def test_o_checkout_traz_o_historico_inteiro(self):
@@ -89,7 +117,7 @@ class WorkflowRegistroDaPr(unittest.TestCase):
 
     def test_roda_o_check_da_base_com_o_head_do_evento(self):
         self.assertIn('git cat-file -e "origin/$BASE:scripts/freios/registro_da_pr.py"', self.texto)
-        self.assertIn('run: python "$FREIOS_DIR/registro_da_pr.py"', self.texto)
+        self.assertIn('cd "$FREIOS_RAIZ"\n          python -m scripts.freios.registro_da_pr', self.texto)
         self.assertIn("HEAD: ${{ github.event.pull_request.head.sha }}", self.texto)
         self.assertIn("PR: ${{ github.event.pull_request.number }}", self.texto)
 
@@ -122,11 +150,12 @@ class ModeloDaPr(unittest.TestCase):
         ok, mensagem = self.conferir(texto)
         self.assertTrue(ok, mensagem)
 
-    def test_o_modelo_cita_os_dois_scripts_que_existem(self):
+    def test_o_modelo_cita_os_dois_modulos_que_existem(self):
         texto = MODELO.read_text(encoding="utf-8")
-        for script in ("scripts/freios/registro_da_pr.py", "scripts/freios/registrar_na_pr.py"):
-            self.assertIn(script, texto)
-            self.assertTrue((RAIZ / script).is_file(), script)
+        for modulo in ("registro_da_pr", "registrar_na_pr"):
+            self.assertIn(modulo, texto)
+            self.assertTrue((RAIZ / "scripts" / "freios" / f"{modulo}.py").is_file(), modulo)
+        self.assertIn("python -m scripts.freios.registrar_na_pr", texto)
 
 
 if __name__ == "__main__":

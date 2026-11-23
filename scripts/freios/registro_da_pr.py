@@ -4,9 +4,9 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
-import saida_utf8
-from github_api import Cliente, ErroDoGitHub, ler_pr
-from registro_texto import (
+from scripts.freios import saida_utf8
+from scripts.freios.github_api import Cliente, ErroDoGitHub, ler_pr
+from scripts.freios.registro_texto import (
     SHA_INTEIRO,
     falta_do_head,
     hexas_de,
@@ -36,7 +36,7 @@ CAMINHOS_SENSIVEIS = (
 )
 MINIMO_DA_PROVA = 40
 MODELO = ".github/PULL_REQUEST_TEMPLATE.md"
-PUBLICADOR = "scripts/freios/registrar_na_pr.py"
+PUBLICADOR = "scripts.freios.registrar_na_pr"
 MARCAS_DE_PROVA_PARCIAL = re.compile(r"\b(nao[\s-]+cobert[oa]s?|bloquead[oa]s?)\b")
 LINHA_DE_FECHAMENTO = re.compile(r"^closes\s+(\S.*)$", re.I)
 def uma_linha_de(campo):
@@ -45,7 +45,7 @@ def uma_linha_de(campo):
 
 USO = (
     "uso: GITHUB_TOKEN=… GITHUB_REPOSITORY=<dono/repo> PR=<número> HEAD=<SHA inteiro do head> "
-    "python scripts/freios/registro_da_pr.py"
+    "python -m scripts.freios.registro_da_pr"
 )
 
 
@@ -250,7 +250,7 @@ def mensagem_de_falha(pr, faltas):
             *(f"    - {falta}" for falta in faltas),
             f"  Conserto: o formato de cada parte está em {MODELO}. O que está em comentário de HTML, em bloco de código "
             f"ou em citação não conta.",
-            f"  Registrar a revisão e a prova com o head lido do GitHub: python {PUBLICADOR} --help",
+            f"  Registrar a revisão e a prova com o head lido do GitHub: python -m {PUBLICADOR} --help",
         ]
     )
 

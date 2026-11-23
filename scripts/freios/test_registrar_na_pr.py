@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import registrar_na_pr
-from registro_da_pr import conferir
-from registrar_na_pr import corpo_com_a_prova, ler_argumentos, secao_da_prova
-from test_registro_da_pr import FECHA, HEAD, OUTRO, REPO, prova, revisao
+from scripts.freios import registrar_na_pr
+from scripts.freios.registro_da_pr import conferir
+from scripts.freios.registrar_na_pr import corpo_com_a_prova, ler_argumentos, secao_da_prova
+from scripts.freios.test_registro_da_pr import FECHA, HEAD, OUTRO, REPO, prova, revisao
 
 CORPO = f"Atenção: BAIXA\n\n{FECHA}\n"
 

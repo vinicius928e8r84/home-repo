@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import auditoria_npm
-from auditoria_npm import ErroDeAuditoria, main, novas_altas, npm_audit
+from scripts.freios import auditoria_npm
+from scripts.freios.auditoria_npm import ErroDeAuditoria, main, novas_altas, npm_audit
 
 PASTA = "scripts/freios"
 LIMPO = {"vulnerabilities": {}}

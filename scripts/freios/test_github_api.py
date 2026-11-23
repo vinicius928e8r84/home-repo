@@ -5,8 +5,8 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-import registro_da_pr
-from github_api import Cliente, ErroDoGitHub, corpos_em_ordem, ler_pr
+from scripts.freios import registro_da_pr
+from scripts.freios.github_api import Cliente, ErroDoGitHub, corpos_em_ordem, ler_pr
 
 HEAD = "c" * 40
 REPO = "dono/repo"
