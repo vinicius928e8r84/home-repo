@@ -395,7 +395,9 @@ def cmd_spawn(a):
 
     host = a.host or repo.get("host")
     if host and host != "local":
-        return remote().spawn(a, repo, name, task, model, level, request, context_block, host)
+        job = dict(repo=repo, name=name, task=task, model=model, level=level, request=request,
+                   context_block=context_block, host=host)
+        return remote().spawn(a, job)
 
     path = os.path.expanduser(repo["path"])
     if not os.path.isdir(os.path.join(path, ".git")):

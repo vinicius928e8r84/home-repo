@@ -65,7 +65,7 @@ def ssh(host, command, step="remote", stdin=None):
     try:
         out = subprocess.run(ssh_argv(host) + [command], capture_output=True, timeout=180, **kwargs)
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise Fail("ssh", "cannot run ssh to %s: %s" % (host, e))
+        raise Fail("ssh", "cannot run ssh to %s: %s" % (host, e)) from e
     text = out.stdout.decode("utf-8", "replace")
     error = out.stderr.decode("utf-8", "replace").strip()
     if out.returncode == 255:
@@ -135,8 +135,8 @@ def register_asks(meta, text):
         try:
             ask = json.loads(line)
             question = ask["question"]
-        except (ValueError, KeyError, TypeError):
-            raise Fail("sync", "%s: asks.jsonl on %s has a line that is not a decision: %r" % (meta["name"], meta["host"], line[:80]))
+        except (ValueError, KeyError, TypeError) as e:
+            raise Fail("sync", "%s: asks.jsonl on %s has a line that is not a decision: %r" % (meta["name"], meta["host"], line[:80])) from e
         entry = dict(id="D%d" % (len(crew.decisions()) + 1), at=crew.now(), worker=meta["name"], repo=meta["repo"],
                      question=question, recommend=ask.get("recommend"), status="open")
         crew.log_decision(entry)
@@ -145,105 +145,138 @@ def register_asks(meta, text):
         crew.write_text(seen_path, str(len(lines)))
 
 
+def pull(host, group):
+    folders = " ".join(shlex.quote(m["remote_dir"]) for m in group)
+    pulled = json.loads(ssh(host, "python3 - " + folders, "sync", stdin=PULL_SCRIPT))
+    if not isinstance(pulled, dict):
+        raise ValueError("not an object")
+    return pulled
+
+
+def mirror_worker(meta, item):
+    if item.get("state") is not None:
+        mirror(meta["state_file"], item["state"])
+    if item.get("report") is not None:
+        mirror(meta["report"], item["report"])
+    register_asks(meta, item.get("asks"))
+
+
+def sync_host(host, group):
+    try:
+        pulled = pull(host, group)
+    except ValueError as e:
+        return ["%s answered something that is not the state of its workers (%s)" % (host, e)]
+    except Fail as e:
+        return ["%s: %s" % (host, e.error)]
+    problems = []
+    for meta in group:
+        try:
+            mirror_worker(meta, pulled.get(meta["remote_dir"], {}))
+        except Fail as e:
+            problems.append(e.error)
+    return problems
+
+
 def sync(metas):
     by_host = {}
-    problems = []
     for meta in metas:
         by_host.setdefault(meta["host"], []).append(meta)
-    for host, group in by_host.items():
-        folders = [m["remote_dir"] for m in group]
-        try:
-            pulled = json.loads(ssh(host, "python3 - " + " ".join(shlex.quote(f) for f in folders), "sync", stdin=PULL_SCRIPT))
-            if not isinstance(pulled, dict):
-                raise ValueError("not an object")
-        except ValueError as e:
-            problems.append("%s answered something that is not the state of its workers (%s)" % (host, e))
-            continue
-        except Fail as e:
-            problems.append("%s: %s" % (host, e.error))
-            continue
-        for meta in group:
-            item = pulled.get(meta["remote_dir"], {})
-            try:
-                if item.get("state") is not None:
-                    mirror(meta["state_file"], item["state"])
-                if item.get("report") is not None:
-                    mirror(meta["report"], item["report"])
-                register_asks(meta, item.get("asks"))
-            except Fail as e:
-                problems.append(e.error)
+    problems = [problem for host, group in by_host.items() for problem in sync_host(host, group)]
     if problems:
         raise Fail("sync", "; ".join(problems))
 
 
-def spawn(a, repo, name, task, model, level, request, context_block, host):
-    home = ssh(host, 'printf %s "$HOME"', "host").strip()
-    repo_path = absolute(repo["path"], home)
-    remote_dir = absolute(STATE_DIR, home) + "/" + name
-    crew_home = absolute(CREW_HOME, home)
-    worktree = "%s/worktrees/%s-%s" % (home, a.repo, task)
-    branch = repo.get("branch", "{task}").format(task=task, date=datetime.date.today().strftime("%Y%m%d"))
-    base = "origin/" + repo.get("default_branch", "main")
-    folder = os.path.join(crew.STATE, name)
-    meta = dict(name=name, repo=a.repo, host=host, repo_path=repo_path, task=task,
-                type=a.type or crew.load("model_routing.json").get("default"), model=model, thinking=level,
-                worktree=worktree, branch=branch, base=base, brief=remote_dir + "/brief.md",
+def describe(a, job, home):
+    repo, task = job["repo"], job["task"]
+    remote_dir = absolute(STATE_DIR, home) + "/" + job["name"]
+    folder = os.path.join(crew.STATE, job["name"])
+    return dict(name=job["name"], repo=a.repo, host=job["host"], repo_path=absolute(repo["path"], home), task=task,
+                type=a.type or crew.load("model_routing.json").get("default"), model=job["model"], thinking=job["level"],
+                worktree="%s/worktrees/%s-%s" % (home, a.repo, task),
+                branch=repo.get("branch", "{task}").format(task=task, date=datetime.date.today().strftime("%Y%m%d")),
+                base="origin/" + repo.get("default_branch", "main"), brief=remote_dir + "/brief.md",
                 report=crew.posix(os.path.join(folder, "report.md")), remote_report=remote_dir + "/report.md",
                 state_file=crew.posix(os.path.join(folder, "state.json")), remote_state_file=remote_dir + "/state.json",
-                remote_dir=remote_dir, started=crew.now(), request=request, done_when=a.done)
-    if a.dry_run:
-        return dict(ok=True, dry_run=True, **meta)
+                remote_dir=remote_dir, started=crew.now(), request=job["request"], done_when=a.done)
 
+
+def create_worktree(repo, meta):
+    host, repo_path, worktree = meta["host"], meta["repo_path"], meta["worktree"]
     if not path_exists(host, repo_path + "/.git"):
         raise Fail("repo", "%s:%s is missing: run scripts/vps-setup.sh, or git clone %s %s on %s" % (host, repo_path, repo["remote"], repo_path, host))
     if path_exists(host, worktree):
         raise Fail("worktree", "%s:%s already exists" % (host, worktree))
     ssh(host, "git -C %s fetch --quiet origin" % shlex.quote(repo_path), "fetch")
-    ssh(host, "git -C %s worktree add -b %s %s %s" % (shlex.quote(repo_path), shlex.quote(branch), shlex.quote(worktree), shlex.quote(base)), "worktree")
+    ssh(host, "git -C %s worktree add -b %s %s %s" % (shlex.quote(repo_path), shlex.quote(meta["branch"]), shlex.quote(worktree), shlex.quote(meta["base"])), "worktree")
     meta["base_sha"] = ssh(host, "git -C %s rev-parse HEAD" % shlex.quote(worktree), "worktree").strip()
+
+
+def upload(meta, home, context_block):
+    host, folder = meta["host"], os.path.join(crew.STATE, meta["name"])
     os.makedirs(folder, exist_ok=True)
     brief = crew.BRIEF.format(home=home + "/home-repo", context_block=context_block, **dict(meta, report=meta["remote_report"]))
-    brief = ASK_COMMAND.sub('python3 "%s/ask.py"' % remote_dir, brief)
+    brief = ASK_COMMAND.sub('python3 "%s/ask.py"' % meta["remote_dir"], brief)
     crew.write_text(os.path.join(folder, "brief.md"), brief)
     put(host, meta["brief"], brief)
-    put(host, remote_dir + "/ask.py", ASK_SCRIPT)
+    put(host, meta["remote_dir"] + "/ask.py", ASK_SCRIPT)
     extension = absolute(STATE_DIR, home) + "/crew-state.ts"
     put(host, extension, crew.file_text(crew.EXTENSION))
+    return extension
+
+
+def wait_idle(meta, pane, timeout):
+    host, deadline = meta["host"], time.time() + timeout
+    while True:
+        text = ssh(host, "cat %s 2>/dev/null || true" % shlex.quote(meta["remote_state_file"]))
+        if text.strip():
+            mirror(meta["state_file"], text)
+        if crew.file_state(meta["state_file"]).get("state") == "idle":
+            return
+        if time.time() > deadline:
+            screen = crew.herdr("agent", "pane", "read", pane, "--source", "recent-unwrapped", "--lines", "15")
+            tail = " | ".join(line.strip() for line in str(screen).splitlines()[-6:] if line.strip())
+            raise Fail("agent", "Pi on %s did not become ready in %ds; the pane shows: %s" % (host, timeout, tail))
+        time.sleep(2)
+
+
+def start_pi(a, meta, home, extension):
+    host, crew_home = meta["host"], absolute(CREW_HOME, home)
+    pane = crew.find(workspace_tab(host, home, meta, crew_home + "/bin/herdr"), ("pane_id",))
+    if not pane:
+        raise Fail("pane", "Herdr on %s did not return a pane id" % host)
+    pane = "@%s:%s" % (host, pane)
+    meta["pane"] = pane
     crew.write_meta(meta)
-    herdr_bin = crew_home + "/bin/herdr"
+    launch = 'export PATH="%s/bin:$PATH" && "%s/bin/pi" --approve -e "%s" --model %s:%s'
+    crew.herdr("agent", "pane", "run", pane, launch % (crew_home, crew_home, extension, meta["model"], meta["thinking"]))
+    wait_idle(meta, pane, a.start_timeout)
+    crew.send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
+
+
+def spawn(a, job):
+    host, name = job["host"], job["name"]
+    home = ssh(host, 'printf %s "$HOME"', "host").strip()
+    meta = describe(a, job, home)
+    if a.dry_run:
+        return dict(ok=True, dry_run=True, **meta)
+
+    create_worktree(job["repo"], meta)
+    extension = upload(meta, home, job["context_block"])
+    crew.write_meta(meta)
     try:
-        pane = crew.find(workspace_tab(host, home, name, meta, herdr_bin), ("pane_id",))
-        if not pane:
-            raise Fail("pane", "Herdr on %s did not return a pane id" % host)
-        pane = "@%s:%s" % (host, pane)
-        meta["pane"] = pane
-        crew.write_meta(meta)
-        crew.herdr("agent", "pane", "run", pane, 'export PATH="%s/bin:$PATH" && "%s/bin/pi" --approve -e "%s" --model %s:%s' % (crew_home, crew_home, extension, model, level))
-        deadline = time.time() + a.start_timeout
-        while True:
-            text = ssh(host, "cat %s 2>/dev/null || true" % shlex.quote(meta["remote_state_file"]))
-            if text.strip():
-                mirror(meta["state_file"], text)
-            if crew.file_state(meta["state_file"]).get("state") == "idle":
-                break
-            if time.time() > deadline:
-                screen = crew.herdr("agent", "pane", "read", pane, "--source", "recent-unwrapped", "--lines", "15")
-                tail = " | ".join(line.strip() for line in str(screen).splitlines()[-6:] if line.strip())
-                raise Fail("agent", "Pi on %s did not become ready in %ds; the pane shows: %s" % (host, a.start_timeout, tail))
-            time.sleep(2)
-        crew.send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
+        start_pi(a, meta, home, extension)
     except Fail as e:
         meta["error"] = dict(step=e.step, error=e.error)
         crew.write_meta(meta)
         crew.emit("spawn_failed", name, step=e.step, error=e.error)
-        raise Fail(e.step, "%s (worktree %s:%s and state kept; fix and `close %s` before retrying)" % (e.error, host, worktree, name))
-    crew.emit("spawned", name, repo=a.repo, type=meta["type"], model="%s:%s" % (model, level), host=host)
+        raise Fail(e.step, "%s (worktree %s:%s and state kept; fix and `close %s` before retrying)" % (e.error, host, meta["worktree"], name)) from e
+    crew.emit("spawned", name, repo=a.repo, type=meta["type"], model="%s:%s" % (job["model"], job["level"]), host=host)
     if not crew.watcher_alive() and os.environ.get("HERDR_PANE_ID"):
         crew.start_watcher(crew.my_pane("watch"))
     return dict(ok=True, watching=bool(os.environ.get("HERDR_PANE_ID")), **meta)
 
 
-def workspace_tab(host, home, name, meta, herdr_bin):
+def workspace_tab(host, home, meta, herdr_bin):
     listed = herdr(host, "pane", "workspace", "list")
     workspace = None
     for ws in (listed.get("result", {}).get("workspaces", []) if isinstance(listed, dict) else []):
@@ -254,6 +287,6 @@ def workspace_tab(host, home, name, meta, herdr_bin):
         workspace = crew.find(made, ("workspace_id",))
     if not workspace:
         raise Fail("pane", "Herdr on %s did not return the id of the `%s` workspace" % (host, crew.CREW_WORKSPACE))
-    return herdr(host, "pane", "tab", "create", "--workspace", workspace, "--cwd", meta["worktree"], "--label", name, "--no-focus",
-                 "--env", "CREW_STATE_FILE=" + meta["remote_state_file"], "--env", "CREW_AGENT_NAME=" + name,
+    return herdr(host, "pane", "tab", "create", "--workspace", workspace, "--cwd", meta["worktree"], "--label", meta["name"], "--no-focus",
+                 "--env", "CREW_STATE_FILE=" + meta["remote_state_file"], "--env", "CREW_AGENT_NAME=" + meta["name"],
                  "--env", "CREW_HERDR_BIN=" + herdr_bin)
