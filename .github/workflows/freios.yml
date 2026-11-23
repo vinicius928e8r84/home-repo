@@ -1,0 +1,112 @@
+name: Freios
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freios-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  freios:
+    name: Freios
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+      - name: Usar os freios da base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if git cat-file -e "origin/$BASE:scripts/freios/freios.py" 2>/dev/null; then
+            rm -rf scripts/freios
+            git archive "origin/$BASE" scripts/freios | tar -x
+            echo "FREIOS_DA_BASE=1" >> "$GITHUB_ENV"
+            echo "freios da base origin/$BASE: a PR não consegue afrouxá-los"
+          else
+            echo "a base ainda não tem os freios: usando os da PR (só acontece na PR que os cria)"
+          fi
+      - name: Instalar ruff e ESLint
+        run: |
+          python -m pip install --disable-pip-version-check -r scripts/freios/requirements.txt
+          npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/freios
+      - name: Freios
+        run: |
+          set -o pipefail
+          python scripts/freios/freios.py --tudo --sem-testes 2>&1 | tee "$RUNNER_TEMP/freios.txt"
+      - name: Voltar aos freios da PR
+        if: ${{ !cancelled() && env.FREIOS_DA_BASE == '1' }}
+        run: |
+          rm -rf scripts/freios
+          git checkout -- scripts/freios
+      - name: Instalar ruff e ESLint da PR
+        if: ${{ !cancelled() && env.FREIOS_DA_BASE == '1' }}
+        run: |
+          python -m pip install --disable-pip-version-check -r scripts/freios/requirements.txt
+          npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/freios
+      - name: Freios nos arquivos da PR
+        if: ${{ !cancelled() && env.FREIOS_DA_BASE == '1' }}
+        run: |
+          set -o pipefail
+          python scripts/freios/freios.py --tudo --sem-testes 2>&1 | tee "$RUNNER_TEMP/freios-da-pr.txt"
+      - name: Nenhuma ferramenta pulada
+        if: ${{ !cancelled() }}
+        run: python -m scripts.freios.sem_pulo "$RUNNER_TEMP"/freios*.txt
+      - name: Testes
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover
+
+  auditoria:
+    name: Auditoria de dependências
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+      - name: Usar a auditoria da base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if git cat-file -e "origin/$BASE:scripts/freios/auditoria_npm.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/freios-da-base"
+            git archive "origin/$BASE" scripts/freios | tar -x -C "$RUNNER_TEMP/freios-da-base"
+            echo "FREIOS_RAIZ=$RUNNER_TEMP/freios-da-base" >> "$GITHUB_ENV"
+          else
+            echo "FREIOS_RAIZ=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          fi
+      - name: Definir a pasta da auditoria
+        if: github.event_name != 'pull_request'
+        run: echo "FREIOS_RAIZ=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+      - name: npm audit (só alta e crítica, só o que a mudança introduz)
+        run: |
+          cd "$FREIOS_RAIZ"
+          python -m scripts.freios.auditoria_npm --raiz "$GITHUB_WORKSPACE" --base "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

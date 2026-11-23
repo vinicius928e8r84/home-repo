@@ -1,0 +1,48 @@
+name: Registro da PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: registro-da-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  registro-da-pr:
+    name: Registro da PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Usar as regras da base
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if git cat-file -e "origin/$BASE:scripts/freios/registro_da_pr.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/freios-da-base"
+            git archive "origin/$BASE" scripts/freios | tar -x -C "$RUNNER_TEMP/freios-da-base"
+            echo "FREIOS_RAIZ=$RUNNER_TEMP/freios-da-base" >> "$GITHUB_ENV"
+          else
+            echo "FREIOS_RAIZ=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          fi
+      - name: Registro da PR
+        run: |
+          cd "$FREIOS_RAIZ"
+          python -m scripts.freios.registro_da_pr
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}

@@ -32,6 +32,8 @@ Use this template for writing the PR body:
 <optional: potential ramifications of merge>
 ```
 
+If the repo has `.github/PULL_REQUEST_TEMPLATE.md`, keep the extra lines it adds after Merge Danger (for example `Atenção:` and `Closes <issue URL>`); a CI check reads them.
+
 ## Sections
 
 Skip all preambles and keep prose brief. Use the user's domain language from `GLOSSARY.md`.
