@@ -25,6 +25,14 @@ class AsActionsEstaoFixadasPorSha(unittest.TestCase):
                 with self.subTest(arquivo=arquivo.name, action=usada):
                     self.assertRegex(usada, r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
 
+    def test_todo_checkout_busca_o_historico_e_nao_deixa_o_token_no_git(self):
+        for arquivo in sorted(WORKFLOWS.glob("*.yml")):
+            texto = arquivo.read_text(encoding="utf-8")
+            with self.subTest(arquivo=arquivo.name):
+                self.assertEqual(texto.count("persist-credentials: false"), texto.count("actions/checkout@"))
+                self.assertEqual(texto.count("fetch-depth: 0"), texto.count("actions/checkout@"))
+                self.assertNotIn("git fetch", texto)
+
     def test_workflows_nao_tem_comentario(self):
         for arquivo in sorted(WORKFLOWS.glob("*.yml")):
             with self.subTest(arquivo=arquivo.name):

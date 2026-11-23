@@ -21,6 +21,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
@@ -28,7 +31,6 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
         run: |
-          git fetch --no-tags --depth=1 origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
           if git cat-file -e "origin/$BASE:scripts/freios/registro_da_pr.py" 2>/dev/null; then
             mkdir -p "$RUNNER_TEMP/freios-da-base"
             git archive "origin/$BASE" scripts/freios | tar -x -C "$RUNNER_TEMP/freios-da-base"
