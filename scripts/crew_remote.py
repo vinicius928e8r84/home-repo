@@ -12,6 +12,7 @@ crew = None
 SESSION = os.environ.get("CREW_REMOTE_SESSION", "crew")
 CREW_HOME = os.environ.get("CREW_REMOTE_HOME", "$HOME/.local/share/crew")
 STATE_DIR = os.environ.get("CREW_REMOTE_DIR", "$HOME/crew-state")
+GIT_TIMEOUT = os.environ.get("CREW_REMOTE_GIT_TIMEOUT", "120")
 PANE_ON_HOST = re.compile(r"@([A-Za-z0-9_.@-]+):(\S+)")
 PANE_VERBS = {"get", "run", "read", "send-text", "send-keys", "close"}
 ASK_COMMAND = re.compile(r'python3? "[^"]*crew\.py" ask')
@@ -54,10 +55,11 @@ print(json.dumps(out))
 '''
 
 
-def ssh_argv(host):
+def ssh_argv(host, *extra):
     custom = os.environ.get("CREW_SSH")
     base = json.loads(custom) if custom and custom.startswith("[") else [custom or "ssh"]
-    return base + ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host]
+    options = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"]
+    return base + options + list(extra) + [host]
 
 
 def ssh(host, command, step="remote", stdin=None):
@@ -95,7 +97,7 @@ def herdr(host, step, *args):
 
 
 def git_argv(meta):
-    return ssh_argv(meta["host"]) + ["git", "-C", meta["repo_path"]]
+    return ssh_argv(meta["host"], "-n") + ["timeout", GIT_TIMEOUT, "git", "-C", shlex.quote(meta["repo_path"])]
 
 
 def path_exists(host, path, flag="-e"):
@@ -127,22 +129,27 @@ def mirror(path, text):
     os.replace(temp, path)
 
 
+def register_ask(meta, line):
+    ask = json.loads(line)
+    entry = dict(id="D%d" % (len(crew.decisions()) + 1), at=crew.now(), worker=meta["name"], repo=meta["repo"],
+                 question=ask["question"], recommend=ask.get("recommend"), status="open")
+    crew.log_decision(entry)
+    crew.emit("decision_needed", meta["name"], id=entry["id"], question=entry["question"])
+
+
 def register_asks(meta, text):
     lines = [line for line in (text or "").rpartition("\n")[0].splitlines() if line.strip()]
     seen_path = os.path.join(crew.STATE, meta["name"], "asks.seen")
     seen = int(crew.file_text(seen_path) or 0)
-    for line in lines[seen:]:
+    broken = []
+    for number, line in enumerate(lines[seen:], seen + 1):
         try:
-            ask = json.loads(line)
-            question = ask["question"]
-        except (ValueError, KeyError, TypeError) as e:
-            raise Fail("sync", "%s: asks.jsonl on %s has a line that is not a decision: %r" % (meta["name"], meta["host"], line[:80])) from e
-        entry = dict(id="D%d" % (len(crew.decisions()) + 1), at=crew.now(), worker=meta["name"], repo=meta["repo"],
-                     question=question, recommend=ask.get("recommend"), status="open")
-        crew.log_decision(entry)
-        crew.emit("decision_needed", meta["name"], id=entry["id"], question=entry["question"])
-    if len(lines) > seen:
-        crew.write_text(seen_path, str(len(lines)))
+            register_ask(meta, line)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            broken.append(line[:80])
+        crew.write_text(seen_path, str(number))
+    if broken:
+        raise Fail("sync", "%s: asks.jsonl on %s has %d line(s) that are not a decision and were skipped: %r" % (meta["name"], meta["host"], len(broken), broken))
 
 
 def pull(host, group):

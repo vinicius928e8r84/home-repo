@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,9 @@ i = 0
 while i < len(args):
     if args[i] == "-o":
         i += 2
+        continue
+    if args[i] == "-n":
+        i += 1
         continue
     rest.append(args[i])
     i += 1
@@ -278,11 +282,43 @@ class RemoteCrewTest(unittest.TestCase):
         board, out = self.crew("board", "--json")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("not a decision", out.stderr)
-        with open(asks, "w", encoding="utf-8") as f:
+        with open(asks, "a", encoding="utf-8") as f:
             f.write('{"question": "pergunta inteira", "recommend": "sim"}\n')
-        self.crew("board", "--json")
+        board, out = self.crew("board", "--json")
+        self.assertNotIn("not a decision", out.stderr)
         with open(self.state + "/decisions.jsonl", encoding="utf-8") as f:
             self.assertIn("pergunta inteira", f.read())
+
+    def test_a_valid_ask_before_a_broken_one_is_registered_once(self):
+        self.spawn()
+        asks = self.vps + "/crew-state/home-toy/asks.jsonl"
+        with open(asks, "w", encoding="utf-8") as f:
+            f.write('{"question": "q1", "recommend": "a"}\nnot json\n{"question": "q2", "recommend": "b"}\n[1]\n')
+        for _ in range(3):
+            board, out = self.crew("board", "--json")
+            self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual([d["question"] for d in board["decisions"]], ["q1", "q2"])
+        with open(self.state + "/home-toy/asks.seen", encoding="utf-8") as f:
+            self.assertEqual(f.read(), "4")
+
+    def test_git_over_ssh_is_bounded_and_does_not_read_stdin(self):
+        argv = crew_remote.git_argv(dict(host="vps", repo_path="/srv/my repo"))
+        self.assertIn("-n", argv[:argv.index("vps")])
+        self.assertIn("ServerAliveInterval=5", argv)
+        self.assertEqual(argv[argv.index("vps") + 1:], ["timeout", "120", "git", "-C", "'/srv/my repo'"])
+
+    def test_a_git_that_hangs_on_the_host_does_not_hold_the_watcher(self):
+        self.spawn()
+        shim = self.tmp + "/shim"
+        os.makedirs(shim)
+        with open(shim + "/git", "w", encoding="utf-8", newline="\n") as f:
+            f.write("#!/usr/bin/env bash\nexec sleep 60\n")
+        os.chmod(shim + "/git", 0o755)
+        self.env.update(PATH=shim + os.pathsep + self.env["PATH"], CREW_REMOTE_GIT_TIMEOUT="1")
+        started = time.time()
+        status, out = self.crew("status")
+        self.assertLess(time.time() - started, 40, out.stderr)
+        self.assertEqual(status["workers"][0]["state"], "idle")
 
     def test_only_the_pane_argument_is_routed_to_a_host(self):
         self.assertEqual(crew_remote.pane_on_host(["pane", "send-text", "w1:p2", "@joao:veja"]), (None, ["pane", "send-text", "w1:p2", "@joao:veja"]))
