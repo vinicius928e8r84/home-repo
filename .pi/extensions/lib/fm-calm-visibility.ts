@@ -29,16 +29,12 @@ export const CALM_TRANSCRIPT_CLASSES = [
 
 export type CalmTranscriptClass = (typeof CALM_TRANSCRIPT_CLASSES)[number];
 
-// Calm is on or off. "assistant-working-note" is deliberately absent from the allowlist:
-// Calm hides mid-turn assistant working notes, keeping the genuine final reply.
 const CALM_VISIBLE_CLASSES = new Set<CalmTranscriptClass>([
   "genuine-user-prompt",
   "genuine-agent-response",
   "working-status",
 ]);
 
-// Legacy session entries from Calm versions before 2026-07-23 retain this
-// presentation type. New operational input stays user-role and is never rerouted.
 export const FIRSTMATE_SYNTHETIC_PRESENTATION_TYPE = "firstmate-synthetic-input-presentation";
 export const FIRSTMATE_CALM_PRESENTATION_EVENT = "firstmate:calm-presentation";
 
