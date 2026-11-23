@@ -1,0 +1,18 @@
+preview = true
+target-version = "py310"
+# Motivo: scripts/crew.py tem funções acima dos limites de saúde; outra tarefa o divide em
+# módulos e esta exclusão sai junto. Espelha scripts/freios/ignorar.json.
+extend-exclude = [
+  "scripts/crew.py",
+]
+
+[lint]
+explicit-preview-rules = true
+select = ["F", "E9", "B", "T100", "C901", "PLR0913", "PLR1702"]
+
+[lint.mccabe]
+max-complexity = 8
+
+[lint.pylint]
+max-args = 4
+max-nested-blocks = 3

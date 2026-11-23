@@ -102,6 +102,234 @@ function settle(queued: unknown): void {
   void Promise.resolve(queued).catch(() => {});
 }
 
+type PendingState = {
+  readonly patch: CalmPendingOperationalLayoutPatch;
+  readonly retentionBySession: WeakMap<object, boolean>;
+  // The interactive mode that last drew queued rows, so a /calm toggle can redraw them.
+  lastHost?: PendingRowsHost;
+  // What the latest draw of the queued listing actually hid, and for which session. The
+  // restore retains from this record rather than a fresh classification, so a row the
+  // captain never saw stays hidden even if the classifier cannot answer a second time.
+  hidden?: { session: object; texts: Set<string> };
+  // Set only for the synchronous draw below, so every other reader of the queue still
+  // sees exactly what Pi queued.
+  hidingInto?: Set<string>;
+  // Set only for the synchronous restore below, so any other clearAllQueues caller keeps
+  // Pi's stock semantics.
+  restoring?: Restoring;
+};
+
+function createPendingState(hidesOperationalInput: () => boolean): PendingState {
+  const state: PendingState = {
+    patch: {
+      hidesOperationalInput,
+      isOperationalInput: isFirstmateOperationalPresentationText,
+      refresh: () => state.lastHost?.updatePendingMessagesDisplay(),
+    },
+    retentionBySession: new WeakMap<object, boolean>(),
+  };
+  return state;
+}
+
+function capturePendingOriginals(
+  prototype: InteractiveModePendingPrototype,
+): InteractiveModePendingPrototype {
+  const originals: InteractiveModePendingPrototype = {
+    getAllQueuedMessages: prototype.getAllQueuedMessages,
+    updatePendingMessagesDisplay: prototype.updatePendingMessagesDisplay,
+    clearAllQueues: prototype.clearAllQueues,
+    restoreQueuedMessagesToEditor: prototype.restoreQueuedMessagesToEditor,
+  };
+  for (const [name, method] of Object.entries(originals)) {
+    if (typeof method !== "function") {
+      throw new Error(`Firstmate Calm requires Pi InteractiveMode.${name}`);
+    }
+  }
+  return originals;
+}
+
+function supportsRetention(members: Record<string, unknown>, host: PendingRowsHost): boolean {
+  return (
+    CALM_QUEUE_RETENTION_SESSION_METHODS.every((name) => typeof members[name] === "function") &&
+    typeof members.isIdle === "boolean" &&
+    Array.isArray(host.compactionQueuedMessages)
+  );
+}
+
+function warnUnsupported(host: PendingRowsHost): void {
+  if (typeof host.showWarning === "function") {
+    host.showWarning(CALM_QUEUED_ROWS_UNSUPPORTED_WARNING);
+  } else {
+    process.stderr.write(`${CALM_QUEUED_ROWS_UNSUPPORTED_WARNING}\n`);
+  }
+}
+
+function retainingSession(state: PendingState, host: PendingRowsHost): RetainingSession | undefined {
+  const session = host.session;
+  if (typeof session !== "object" || session === null) return undefined;
+  let supported = state.retentionBySession.get(session);
+  if (supported === undefined) {
+    supported = supportsRetention(session as Record<string, unknown>, host);
+    state.retentionBySession.set(session, supported);
+    if (!supported) warnUnsupported(host);
+  }
+  return supported ? (session as RetainingSession) : undefined;
+}
+
+// Delivers what a settled run left queued. Messages already in the queue cannot start a
+// turn by themselves, so the first is taken out and sent as the turn's prompt and the rest
+// are put back behind it: steering first, then follow-ups, the order Pi delivers them in.
+function continueWhenSettled(host: PendingRowsHost, session: RetainingSession): void {
+  const settled = async (): Promise<boolean> => {
+    do {
+      await session.waitForIdle();
+      // Pi resolves idle waiters in microtasks, and tree navigation resumes from its
+      // abort in the same microtask run and marks the session busy before its first await.
+      // Yielding a macrotask lets that navigation claim the session, so the turn starts on
+      // the navigated branch instead of racing it on the abandoned one.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (host.session !== session) return false;
+    } while (!session.isIdle);
+    return true;
+  };
+  settled()
+    .then((idle) => {
+      if (!idle) return;
+      const { steering, followUp } = session.clearQueue();
+      const first = steering.length > 0 ? steering.shift() : followUp.shift();
+      if (first === undefined) return;
+      for (const text of steering) settle(session._queueSteer(text));
+      for (const text of followUp) settle(session._queueFollowUp(text));
+      host.showStatus?.(CALM_SUPERVISION_CONTINUES_NOTICE);
+      // Pi rejects before recording the prompt when it cannot start the turn, so the
+      // message is queued again rather than lost.
+      session.sendUserMessage(first).catch(() => settle(session._queueFollowUp(first)));
+    })
+    .catch(() => {});
+}
+
+function patchGetAllQueuedMessages(
+  prototype: InteractiveModePendingPrototype,
+  original: InteractiveModePendingPrototype["getAllQueuedMessages"],
+  state: PendingState,
+): void {
+  prototype.getAllQueuedMessages = function (this: PendingRowsHost): QueuedMessages {
+    const queued = original.call(this);
+    const texts = state.hidingInto;
+    if (!texts) return queued;
+    const stays = (text: string): boolean => {
+      if (!state.patch.isOperationalInput(text)) return true;
+      texts.add(text);
+      return false;
+    };
+    return {
+      ...queued,
+      steering: queued.steering.filter(stays),
+      followUp: queued.followUp.filter(stays),
+    };
+  };
+}
+
+function patchUpdatePendingMessagesDisplay(
+  prototype: InteractiveModePendingPrototype,
+  original: InteractiveModePendingPrototype["updatePendingMessagesDisplay"],
+  state: PendingState,
+): void {
+  prototype.updatePendingMessagesDisplay = function (this: PendingRowsHost): void {
+    state.lastHost = this;
+    if (!state.patch.hidesOperationalInput() || !retainingSession(state, this)) {
+      state.hidden = undefined;
+      original.call(this);
+      return;
+    }
+    const texts = new Set<string>();
+    state.hidingInto = texts;
+    try {
+      // Pi skips the spacer and dequeue hint when nothing is left to list, so an
+      // all-operational queue draws no rows at all.
+      original.call(this);
+    } finally {
+      state.hidingInto = undefined;
+    }
+    state.hidden = texts.size > 0 ? { session: this.session as object, texts } : undefined;
+  };
+}
+
+function patchClearAllQueues(
+  prototype: InteractiveModePendingPrototype,
+  original: InteractiveModePendingPrototype["clearAllQueues"],
+  state: PendingState,
+): void {
+  prototype.clearAllQueues = function (this: PendingRowsHost): QueuedMessages {
+    const current = state.restoring;
+    if (!current) return original.call(this);
+    const { session, retains } = current;
+    const steering = session.getSteeringMessages().filter(retains);
+    const followUp = session.getFollowUpMessages().filter(retains);
+    const compaction = this.compactionQueuedMessages.filter((message) => retains(message.text));
+    const cleared = original.call(this);
+    if (steering.length + followUp.length + compaction.length === 0) return cleared;
+    // Pi's already-expanded queueing entry points: no input handler or template expansion
+    // runs a second time on text that already went through them once.
+    for (const text of steering) settle(session._queueSteer(text));
+    for (const text of followUp) settle(session._queueFollowUp(text));
+    this.compactionQueuedMessages.push(...compaction);
+    current.keptInAgentQueue = steering.length + followUp.length;
+    return {
+      ...cleared,
+      steering: cleared.steering.filter((text) => !retains(text)),
+      followUp: cleared.followUp.filter((text) => !retains(text)),
+    };
+  };
+}
+
+function retainsHidden(
+  state: PendingState,
+  hiddenTexts: Set<string> | undefined,
+  hidesNow: boolean,
+): (text: string) => boolean {
+  // A notification queued since the last draw was never shown either, so while Calm
+  // hides, it is kept the same way; classification is asked once per text.
+  const answers = new Map<string, boolean>();
+  return (text: string): boolean => {
+    if (hiddenTexts?.has(text)) return true;
+    if (!hidesNow) return false;
+    let answer = answers.get(text);
+    if (answer === undefined) {
+      answer = state.patch.isOperationalInput(text);
+      answers.set(text, answer);
+    }
+    return answer;
+  };
+}
+
+function patchRestoreQueuedMessagesToEditor(
+  prototype: InteractiveModePendingPrototype,
+  original: InteractiveModePendingPrototype["restoreQueuedMessagesToEditor"],
+  state: PendingState,
+): void {
+  prototype.restoreQueuedMessagesToEditor = function (
+    this: PendingRowsHost,
+    options?: RestoreOptions,
+  ): number {
+    const hidesNow = state.patch.hidesOperationalInput();
+    const hidden = state.hidden;
+    const hiddenTexts = hidden && hidden.session === this.session ? hidden.texts : undefined;
+    const session = hidesNow || hiddenTexts ? retainingSession(state, this) : undefined;
+    if (!session) return original.call(this, options);
+
+    const retains = retainsHidden(state, hiddenTexts, hidesNow);
+    const current: Restoring = { session, retains, keptInAgentQueue: 0 };
+    state.restoring = current;
+    try {
+      return original.call(this, options);
+    } finally {
+      state.restoring = undefined;
+      if (current.keptInAgentQueue > 0) continueWhenSettled(this, session);
+    }
+  };
+}
+
 export function installCalmPendingOperationalLayout(): void {
   const registry = globalThis as typeof globalThis & {
     [key: symbol]: CalmPendingOperationalLayoutPatch | undefined;
@@ -119,185 +347,15 @@ export function installCalmPendingOperationalLayout(): void {
     throw new Error("Firstmate Calm requires Pi InteractiveMode");
   }
   const prototype = InteractiveMode.prototype as unknown as InteractiveModePendingPrototype;
-  const originalGetAllQueuedMessages = prototype.getAllQueuedMessages;
-  const originalUpdatePendingMessagesDisplay = prototype.updatePendingMessagesDisplay;
-  const originalClearAllQueues = prototype.clearAllQueues;
-  const originalRestoreQueuedMessagesToEditor = prototype.restoreQueuedMessagesToEditor;
-  for (const [name, method] of [
-    ["getAllQueuedMessages", originalGetAllQueuedMessages],
-    ["updatePendingMessagesDisplay", originalUpdatePendingMessagesDisplay],
-    ["clearAllQueues", originalClearAllQueues],
-    ["restoreQueuedMessagesToEditor", originalRestoreQueuedMessagesToEditor],
-  ] as const) {
-    if (typeof method !== "function") {
-      throw new Error(`Firstmate Calm requires Pi InteractiveMode.${name}`);
-    }
-  }
+  const originals = capturePendingOriginals(prototype);
+  const state = createPendingState(hidesOperationalInput);
 
-  // The interactive mode that last drew queued rows, so a /calm toggle can redraw them.
-  let lastHost: PendingRowsHost | undefined;
-  const patch: CalmPendingOperationalLayoutPatch = {
-    hidesOperationalInput,
-    isOperationalInput: isFirstmateOperationalPresentationText,
-    refresh: () => lastHost?.updatePendingMessagesDisplay(),
-  };
+  patchGetAllQueuedMessages(prototype, originals.getAllQueuedMessages, state);
+  patchUpdatePendingMessagesDisplay(prototype, originals.updatePendingMessagesDisplay, state);
+  patchClearAllQueues(prototype, originals.clearAllQueues, state);
+  patchRestoreQueuedMessagesToEditor(prototype, originals.restoreQueuedMessagesToEditor, state);
 
-  const retentionBySession = new WeakMap<object, boolean>();
-  function retainingSession(host: PendingRowsHost): RetainingSession | undefined {
-    const session = host.session;
-    if (typeof session !== "object" || session === null) return undefined;
-    let supported = retentionBySession.get(session);
-    if (supported === undefined) {
-      const members = session as Record<string, unknown>;
-      supported =
-        CALM_QUEUE_RETENTION_SESSION_METHODS.every((name) => typeof members[name] === "function") &&
-        typeof members.isIdle === "boolean" &&
-        Array.isArray(host.compactionQueuedMessages);
-      retentionBySession.set(session, supported);
-      if (!supported) {
-        if (typeof host.showWarning === "function") {
-          host.showWarning(CALM_QUEUED_ROWS_UNSUPPORTED_WARNING);
-        } else {
-          console.error(CALM_QUEUED_ROWS_UNSUPPORTED_WARNING);
-        }
-      }
-    }
-    return supported ? (session as RetainingSession) : undefined;
-  }
-
-  // What the latest draw of the queued listing actually hid, and for which session. The
-  // restore retains from this record rather than a fresh classification, so a row the
-  // captain never saw stays hidden even if the classifier cannot answer a second time.
-  let hidden: { session: object; texts: Set<string> } | undefined;
-  // Set only for the synchronous draw below, so every other reader of the queue still
-  // sees exactly what Pi queued.
-  let hidingInto: Set<string> | undefined;
-  // Set only for the synchronous restore below, so any other clearAllQueues caller keeps
-  // Pi's stock semantics.
-  let restoring: Restoring | undefined;
-
-  prototype.getAllQueuedMessages = function (this: PendingRowsHost): QueuedMessages {
-    const queued = originalGetAllQueuedMessages.call(this);
-    const texts = hidingInto;
-    if (!texts) return queued;
-    const stays = (text: string): boolean => {
-      if (!patch.isOperationalInput(text)) return true;
-      texts.add(text);
-      return false;
-    };
-    return {
-      ...queued,
-      steering: queued.steering.filter(stays),
-      followUp: queued.followUp.filter(stays),
-    };
-  };
-
-  prototype.updatePendingMessagesDisplay = function (this: PendingRowsHost): void {
-    lastHost = this;
-    if (!patch.hidesOperationalInput() || !retainingSession(this)) {
-      hidden = undefined;
-      originalUpdatePendingMessagesDisplay.call(this);
-      return;
-    }
-    const texts = new Set<string>();
-    hidingInto = texts;
-    try {
-      // Pi skips the spacer and dequeue hint when nothing is left to list, so an
-      // all-operational queue draws no rows at all.
-      originalUpdatePendingMessagesDisplay.call(this);
-    } finally {
-      hidingInto = undefined;
-    }
-    hidden = texts.size > 0 ? { session: this.session as object, texts } : undefined;
-  };
-
-  prototype.clearAllQueues = function (this: PendingRowsHost): QueuedMessages {
-    const current = restoring;
-    if (!current) return originalClearAllQueues.call(this);
-    const { session, retains } = current;
-    const steering = session.getSteeringMessages().filter(retains);
-    const followUp = session.getFollowUpMessages().filter(retains);
-    const compaction = this.compactionQueuedMessages.filter((message) => retains(message.text));
-    const cleared = originalClearAllQueues.call(this);
-    if (steering.length + followUp.length + compaction.length === 0) return cleared;
-    // Pi's already-expanded queueing entry points: no input handler or template expansion
-    // runs a second time on text that already went through them once.
-    for (const text of steering) settle(session._queueSteer(text));
-    for (const text of followUp) settle(session._queueFollowUp(text));
-    this.compactionQueuedMessages.push(...compaction);
-    current.keptInAgentQueue = steering.length + followUp.length;
-    return {
-      ...cleared,
-      steering: cleared.steering.filter((text) => !retains(text)),
-      followUp: cleared.followUp.filter((text) => !retains(text)),
-    };
-  };
-
-  prototype.restoreQueuedMessagesToEditor = function (
-    this: PendingRowsHost,
-    options?: RestoreOptions,
-  ): number {
-    const hidesNow = patch.hidesOperationalInput();
-    const hiddenTexts = hidden && hidden.session === this.session ? hidden.texts : undefined;
-    const session = hidesNow || hiddenTexts ? retainingSession(this) : undefined;
-    if (!session) return originalRestoreQueuedMessagesToEditor.call(this, options);
-
-    // A notification queued since the last draw was never shown either, so while Calm
-    // hides, it is kept the same way; classification is asked once per text.
-    const answers = new Map<string, boolean>();
-    const retains = (text: string): boolean => {
-      if (hiddenTexts?.has(text)) return true;
-      if (!hidesNow) return false;
-      let answer = answers.get(text);
-      if (answer === undefined) {
-        answer = patch.isOperationalInput(text);
-        answers.set(text, answer);
-      }
-      return answer;
-    };
-    const current: Restoring = { session, retains, keptInAgentQueue: 0 };
-    restoring = current;
-    try {
-      return originalRestoreQueuedMessagesToEditor.call(this, options);
-    } finally {
-      restoring = undefined;
-      if (current.keptInAgentQueue > 0) continueWhenSettled(this, session);
-    }
-  };
-
-  // Delivers what a settled run left queued. Messages already in the queue cannot start a
-  // turn by themselves, so the first is taken out and sent as the turn's prompt and the rest
-  // are put back behind it: steering first, then follow-ups, the order Pi delivers them in.
-  function continueWhenSettled(host: PendingRowsHost, session: RetainingSession): void {
-    const settled = async (): Promise<boolean> => {
-      do {
-        await session.waitForIdle();
-        // Pi resolves idle waiters in microtasks, and tree navigation resumes from its
-        // abort in the same microtask run and marks the session busy before its first await.
-        // Yielding a macrotask lets that navigation claim the session, so the turn starts on
-        // the navigated branch instead of racing it on the abandoned one.
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        if (host.session !== session) return false;
-      } while (!session.isIdle);
-      return true;
-    };
-    settled()
-      .then((idle) => {
-        if (!idle) return;
-        const { steering, followUp } = session.clearQueue();
-        const first = steering.length > 0 ? steering.shift() : followUp.shift();
-        if (first === undefined) return;
-        for (const text of steering) settle(session._queueSteer(text));
-        for (const text of followUp) settle(session._queueFollowUp(text));
-        host.showStatus?.(CALM_SUPERVISION_CONTINUES_NOTICE);
-        // Pi rejects before recording the prompt when it cannot start the turn, so the
-        // message is queued again rather than lost.
-        session.sendUserMessage(first).catch(() => settle(session._queueFollowUp(first)));
-      })
-      .catch(() => {});
-  }
-
-  registry[CALM_PENDING_OPERATIONAL_LAYOUT_PATCH] = patch;
+  registry[CALM_PENDING_OPERATIONAL_LAYOUT_PATCH] = state.patch;
 }
 
 // Redraws the queued listing after a /calm toggle so rows already listed follow the new

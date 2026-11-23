@@ -58,6 +58,32 @@ function contentIsTextOnly(content: unknown): boolean {
   );
 }
 
+function defineOperationalUserMessageComponent(patch: CalmOperationalUserLayoutPatch) {
+  const UserMessageComponent = PiCodingAgent.UserMessageComponent;
+  if (typeof UserMessageComponent !== "function") {
+    throw new Error("Firstmate Calm requires Pi UserMessageComponent");
+  }
+  return class CalmOperationalUserMessageComponent extends UserMessageComponent {
+    private readonly hasLeadingSpacer: boolean;
+
+    constructor(
+      text: UserMessageConstructorArgs[0],
+      markdownTheme: UserMessageConstructorArgs[1],
+      outputPad: number,
+      hasLeadingSpacer: boolean,
+    ) {
+      super(text, markdownTheme, outputPad);
+      this.hasLeadingSpacer = hasLeadingSpacer;
+    }
+
+    override render(width: number): string[] {
+      if (patch.hidesOperationalInput()) return [];
+      const lines = super.render(width);
+      return this.hasLeadingSpacer ? ["", ...lines] : lines;
+    }
+  };
+}
+
 export function installCalmOperationalUserLayout(): void {
   const registry = globalThis as typeof globalThis & {
     [key: symbol]: CalmOperationalUserLayoutPatch | undefined;
@@ -85,29 +111,7 @@ export function installCalmOperationalUserLayout(): void {
     throw new Error("Firstmate Calm requires Pi InteractiveMode.addMessageToChat");
   }
 
-  const UserMessageComponent = PiCodingAgent.UserMessageComponent;
-  if (typeof UserMessageComponent !== "function") {
-    throw new Error("Firstmate Calm requires Pi UserMessageComponent");
-  }
-  class CalmOperationalUserMessageComponent extends UserMessageComponent {
-    private readonly hasLeadingSpacer: boolean;
-
-    constructor(
-      text: UserMessageConstructorArgs[0],
-      markdownTheme: UserMessageConstructorArgs[1],
-      outputPad: number,
-      hasLeadingSpacer: boolean,
-    ) {
-      super(text, markdownTheme, outputPad);
-      this.hasLeadingSpacer = hasLeadingSpacer;
-    }
-
-    override render(width: number): string[] {
-      if (patch.hidesOperationalInput()) return [];
-      const lines = super.render(width);
-      return this.hasLeadingSpacer ? ["", ...lines] : lines;
-    }
-  }
+  const CalmOperationalUserMessageComponent = defineOperationalUserMessageComponent(patch);
 
   prototype.addMessageToChat = function (
     message: UserMessageLike,

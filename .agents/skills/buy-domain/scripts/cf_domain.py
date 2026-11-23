@@ -11,7 +11,7 @@
 
 Token: CF_API_TOKEN in ~/.config/firstmate-secrets/cloudflare.env (mode 600), never printed.
 """
-import json, os, ssl, subprocess, sys, urllib.request, urllib.error, urllib.parse
+import json, os, subprocess, sys, urllib.request, urllib.error, urllib.parse
 
 ENV = os.path.expanduser("~/.config/firstmate-secrets/cloudflare.env")
 API = "https://api.cloudflare.com/client/v4"
@@ -71,71 +71,93 @@ def show(item):
         p.get("currency", ""), item.get("reason", "")))
 
 
+def cmd_search(a):
+    s, d = call("GET", "/accounts/%s/registrar/domain-search?q=%s&limit=10" % (account(), urllib.parse.quote(" ".join(a[1:]))))
+    for it in d.get("result", {}).get("domains", []):
+        show(it)
+    if s != 200:
+        sys.exit(json.dumps(d.get("errors")))
+
+
+def cmd_check(a):
+    s, d = call("POST", "/accounts/%s/registrar/domain-check" % account(), {"domains": a[1:]})
+    if s != 200:
+        sys.exit(json.dumps(d.get("errors")))
+    for it in d["result"]["domains"]:
+        show(it)
+
+
+def cmd_buy(a):
+    if len(a) != 4 or a[2] != "--price":
+        sys.exit("usage: buy <domain> --price X.XX")
+    it = live_price(a[1])
+    if not it.get("registrable"):
+        sys.exit("not registrable: " + it.get("reason", "unknown"))
+    if float(it["pricing"]["registration_cost"]) != float(a[3]):
+        sys.exit("price moved: live %s, you confirmed %s. Show the captain the live price again." % (it["pricing"]["registration_cost"], a[3]))
+    s, d = call("POST", "/accounts/%s/registrar/registrations" % account(), {"domain_name": a[1]}, {"Prefer": "respond-async"})
+    print(s, json.dumps(d.get("result") or d.get("errors")))
+    print("Never retry a buy that returned in_progress: run status until it settles.")
+
+
+def cmd_status(a):
+    s, d = call("GET", "/accounts/%s/registrar/registrations/%s/registration-status" % (account(), a[1]))
+    r = d.get("result") or {}
+    print(s, r.get("state"), r.get("completed"), json.dumps(d.get("errors") or ""))
+
+
+def upsert_a_record(z, name, ip):
+    s, d = call("GET", "/zones/%s/dns_records?type=A&name=%s" % (z, name))
+    body = {"type": "A", "name": name, "content": ip, "proxied": True, "ttl": 1}
+    if d.get("result"):
+        s, d = call("PUT", "/zones/%s/dns_records/%s" % (z, d["result"][0]["id"]), body)
+        act = "updated"
+    else:
+        s, d = call("POST", "/zones/%s/dns_records" % z, body)
+        act = "created"
+    print(name, act if d.get("success") else "FAILED " + json.dumps(d.get("errors")))
+
+
+def cmd_dns(a):
+    if len(a) != 3:
+        sys.exit("usage: dns <domain> <ip>")
+    z = zone(a[1])
+    for name in (a[1], "www." + a[1]):
+        upsert_a_record(z, name, a[2])
+
+
+def cmd_txt(a):
+    if len(a) != 3:
+        sys.exit("usage: txt <domain> <value>")
+    z = zone(a[1])
+    s, d = call("GET", "/zones/%s/dns_records?type=TXT&name=%s" % (z, a[1]))
+    if any(r["content"].strip('"') == a[2] for r in d.get("result", [])):
+        print("TXT already present")
+    else:
+        s, d = call("POST", "/zones/%s/dns_records" % z, {"type": "TXT", "name": a[1], "content": a[2], "ttl": 300})
+        print("created" if d.get("success") else "FAILED " + json.dumps(d.get("errors")))
+
+
+def cmd_verify(a):
+    dom = a[1]
+    for host in (dom, "www." + dom):
+        for path in (a[2:] or ["/"]):
+            url = "https://%s%s" % (host, path)
+            r = subprocess.run(["curl", "-s", "-m", "25", "-L", "-o", "/dev/null", "-w", "%{http_code} %{ssl_verify_result}", url],
+                               capture_output=True, text=True)
+            print(url, r.stdout.strip(), "(ssl 0 = valid)")
+
+
+COMMANDS = {"search": cmd_search, "check": cmd_check, "buy": cmd_buy, "status": cmd_status,
+            "dns": cmd_dns, "txt": cmd_txt, "verify": cmd_verify}
+
+
 def main(a):
     if len(a) < 2:
         sys.exit(__doc__)
-    cmd = a[0]
-    if cmd == "search":
-        s, d = call("GET", "/accounts/%s/registrar/domain-search?q=%s&limit=10" % (account(), urllib.parse.quote(" ".join(a[1:]))))
-        for it in d.get("result", {}).get("domains", []):
-            show(it)
-        if s != 200:
-            sys.exit(json.dumps(d.get("errors")))
-    elif cmd == "check":
-        s, d = call("POST", "/accounts/%s/registrar/domain-check" % account(), {"domains": a[1:]})
-        if s != 200:
-            sys.exit(json.dumps(d.get("errors")))
-        for it in d["result"]["domains"]:
-            show(it)
-    elif cmd == "buy":
-        if len(a) != 4 or a[2] != "--price":
-            sys.exit("usage: buy <domain> --price X.XX")
-        it = live_price(a[1])
-        if not it.get("registrable"):
-            sys.exit("not registrable: " + it.get("reason", "unknown"))
-        if float(it["pricing"]["registration_cost"]) != float(a[3]):
-            sys.exit("price moved: live %s, you confirmed %s. Show the captain the live price again." % (it["pricing"]["registration_cost"], a[3]))
-        s, d = call("POST", "/accounts/%s/registrar/registrations" % account(), {"domain_name": a[1]}, {"Prefer": "respond-async"})
-        print(s, json.dumps(d.get("result") or d.get("errors")))
-        print("Never retry a buy that returned in_progress: run status until it settles.")
-    elif cmd == "status":
-        s, d = call("GET", "/accounts/%s/registrar/registrations/%s/registration-status" % (account(), a[1]))
-        r = d.get("result") or {}
-        print(s, r.get("state"), r.get("completed"), json.dumps(d.get("errors") or ""))
-    elif cmd == "dns":
-        if len(a) != 3:
-            sys.exit("usage: dns <domain> <ip>")
-        z = zone(a[1])
-        for name in (a[1], "www." + a[1]):
-            s, d = call("GET", "/zones/%s/dns_records?type=A&name=%s" % (z, name))
-            body = {"type": "A", "name": name, "content": a[2], "proxied": True, "ttl": 1}
-            if d.get("result"):
-                s, d = call("PUT", "/zones/%s/dns_records/%s" % (z, d["result"][0]["id"]), body)
-                act = "updated"
-            else:
-                s, d = call("POST", "/zones/%s/dns_records" % z, body)
-                act = "created"
-            print(name, act if d.get("success") else "FAILED " + json.dumps(d.get("errors")))
-    elif cmd == "txt":
-        if len(a) != 3:
-            sys.exit("usage: txt <domain> <value>")
-        z = zone(a[1])
-        s, d = call("GET", "/zones/%s/dns_records?type=TXT&name=%s" % (z, a[1]))
-        if any(r["content"].strip('"') == a[2] for r in d.get("result", [])):
-            print("TXT already present")
-        else:
-            s, d = call("POST", "/zones/%s/dns_records" % z, {"type": "TXT", "name": a[1], "content": a[2], "ttl": 300})
-            print("created" if d.get("success") else "FAILED " + json.dumps(d.get("errors")))
-    elif cmd == "verify":
-        dom = a[1]
-        for host in (dom, "www." + dom):
-            for path in (a[2:] or ["/"]):
-                url = "https://%s%s" % (host, path)
-                r = subprocess.run(["curl", "-s", "-m", "25", "-L", "-o", "/dev/null", "-w", "%{http_code} %{ssl_verify_result}", url],
-                                   capture_output=True, text=True)
-                print(url, r.stdout.strip(), "(ssl 0 = valid)")
-    else:
+    if a[0] not in COMMANDS:
         sys.exit(__doc__)
+    COMMANDS[a[0]](a)
 
 
 if __name__ == "__main__":

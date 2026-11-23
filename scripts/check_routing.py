@@ -28,14 +28,8 @@ def pi_models():
     return models
 
 
-def main():
-    cfg = json.load(open(os.path.join(ROOT, "model_routing.json"), encoding="utf-8"))
-    routes = cfg.get("routes", {})
-    models = pi_models()
+def route_problems(routes, models):
     bad = []
-    if cfg.get("default") not in routes:
-        bad.append("default %r is not a route" % cfg.get("default"))
-    routes = dict(routes, **{"on_request:" + k: v for k, v in cfg.get("on_request", {}).items()})
     for task, route in routes.items():
         model, level = route.get("model"), route.get("thinking")
         if model not in models:
@@ -44,13 +38,31 @@ def main():
             bad.append("%s: thinking %r is not one of %s" % (task, level, sorted(LEVELS)))
         if not bad or not bad[-1].startswith(task + ":"):
             print("ok    %-18s %s:%s (context %s)" % (task, model, level, models.get(model)))
-    pi_settings = json.load(open(os.path.join(ROOT, ".pi", "settings.json"), encoding="utf-8"))
+    return bad
+
+
+def settings_problems(pi_settings, routes):
+    bad = []
     chief = "%s/%s" % (pi_settings.get("defaultProvider"), pi_settings.get("defaultModel"))
     want = routes.get("orchestrate", {})
     if (chief, pi_settings.get("defaultThinkingLevel")) != (want.get("model"), want.get("thinking")):
         bad.append(".pi/settings.json starts the chief on %s:%s, but the orchestrate route says %s:%s" % (chief, pi_settings.get("defaultThinkingLevel"), want.get("model"), want.get("thinking")))
     if chief not in pi_settings.get("compaction", {}).get("modelOverrides", {}):
         bad.append(".pi/settings.json has no compaction override for the chief's model %s" % chief)
+    return bad
+
+
+def main():
+    cfg = json.load(open(os.path.join(ROOT, "model_routing.json"), encoding="utf-8"))
+    routes = cfg.get("routes", {})
+    models = pi_models()
+    bad = []
+    if cfg.get("default") not in routes:
+        bad.append("default %r is not a route" % cfg.get("default"))
+    routes = dict(routes, **{"on_request:" + k: v for k, v in cfg.get("on_request", {}).items()})
+    bad += route_problems(routes, models)
+    pi_settings = json.load(open(os.path.join(ROOT, ".pi", "settings.json"), encoding="utf-8"))
+    bad += settings_problems(pi_settings, routes)
     for line in bad:
         print("FAIL  " + line)
     sys.exit(1 if bad else 0)
