@@ -480,6 +480,7 @@ def cmd_watch(a):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("spawn", help="start a worker: worktree, brief, pane, agent")
