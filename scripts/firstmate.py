@@ -1,4 +1,14 @@
-"""firstmate: talk to the firstmate on the main VPS from the Home Repo.
+import json
+import shlex
+import shutil
+import subprocess
+import sys
+import uuid
+
+HOST = "main-vps-factory"
+INBOX = "FM_HOME=/home/factory/firstmate /home/factory/firstmate/bin/fm-inbox.sh"
+TAG = "[home-repo] "
+USO = """firstmate: talk to the firstmate on the main VPS from the Home Repo.
 
 The firstmate is the supervisor that runs the PerpetualMiner and Nova-AI fleet
 on the VPS. This script reaches its captain inbox over SSH (through WSL, which
@@ -14,22 +24,10 @@ A note arrives in the firstmate's session as a wake. It is tagged
 "[home-repo]", so the firstmate reads it as coming from this agent, not as an
 order typed by the owner: an order that needs the owner's word still needs it.
 The firstmate answers with `fm-inbox.sh reply`; read it with `replies`.
-Every command prints the VPS output as is and exits with its exit code.
-"""
-import json
-import shlex
-import shutil
-import subprocess
-import sys
-import uuid
-
-HOST = "main-vps-factory"
-INBOX = "FM_HOME=/home/factory/firstmate /home/factory/firstmate/bin/fm-inbox.sh"
-TAG = "[home-repo] "
+Every command prints the VPS output as is and exits with its exit code."""
 
 
 def ssh_cmd():
-    # Windows: the key lives in WSL. Inside WSL or Linux: plain ssh.
     if sys.platform == "win32":
         return ["wsl.exe", "-e", "ssh"]
     return [shutil.which("ssh") or "ssh"]
@@ -37,7 +35,6 @@ def ssh_cmd():
 
 def call(remote, stdin=None):
     cmd = ssh_cmd() + ["-o", "ConnectTimeout=8", "-o", "BatchMode=yes", HOST, remote]
-    # Bytes, not text mode: on Windows text mode turns "\n" into "\r\n".
     data = stdin.encode("utf-8") if stdin is not None else None
     try:
         out = subprocess.run(cmd, input=data, capture_output=True, timeout=60)
@@ -71,8 +68,9 @@ def replies(show_all):
 
 
 def main(argv):
+    sys.stdout.reconfigure(encoding="utf-8")
     if not argv or argv[0] in ("-h", "--help", "help"):
-        print(__doc__)
+        print(USO)
         return 0
     cmd, rest = argv[0], argv[1:]
     if cmd == "ready":
@@ -87,7 +85,6 @@ def main(argv):
             sys.stderr.write("error: note needs text\n")
             return 2
         rid = "home-repo-" + uuid.uuid4().hex[:12]
-        # Body goes over stdin, never through a remote shell.
         return run(INBOX + " note --request-id " + shlex.quote(rid) + " -", stdin=TAG + text + "\n")
     sys.stderr.write("error: unknown command %r (see --help)\n" % cmd)
     return 2
