@@ -80,7 +80,7 @@ def agrupar(eventos, com_pr):
 
 def avisar(chief, linhas):
     try:
-        crew.tell_chief(chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % " | ".join(linhas))
+        crew.tell_chief(chief, "[crew] aviso automático, ninguém pediu nada: %s. (O estado completo está em `python scripts/crew.py board`.)" % " | ".join(linhas))
     except OSError as e:
         print(json.dumps(dict(ok=False, step="notify", error=str(e))), flush=True)
         return False

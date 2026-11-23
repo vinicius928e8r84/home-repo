@@ -6,7 +6,8 @@ Fail = None
 crew = None
 
 INTERVALO = 120
-LIMITE = "60"
+ABERTAS = "300"
+RECENTES = "60"
 CAMPOS = "number,headRefName,headRefOid,isDraft,state,title,statusCheckRollup"
 REGISTRO = "Registro da PR"
 SEM_FALHA = {"SUCCESS", "NEUTRAL", "SKIPPED"}
@@ -55,8 +56,16 @@ def resumir_pr(pr):
 
 
 def buscar(repo_path):
+    vistas = {}
+    for estado_pedido, limite in (("open", ABERTAS), ("all", RECENTES)):
+        for pr in listar(repo_path, estado_pedido, limite):
+            vistas.setdefault(pr["number"], pr)
+    return list(vistas.values())
+
+
+def listar(repo_path, estado_pedido, limite):
     try:
-        saida = subprocess.run(["gh", "pr", "list", "--state", "all", "--limit", LIMITE, "--json", CAMPOS], cwd=repo_path,
+        saida = subprocess.run(["gh", "pr", "list", "--state", estado_pedido, "--limit", limite, "--json", CAMPOS], cwd=repo_path,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise Fail("gh", str(e)) from e

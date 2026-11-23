@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import types
 import unittest
 
 from scripts.test_crew import CrewCase, minutes_ago
@@ -32,6 +33,7 @@ class VigiaCase(CrewCase):
         self.prs = []
         self.gh_quebrado = False
         self.modulo = self.crew.module("crew_prs")
+        self.buscar_real = self.modulo.buscar
         self.modulo.buscar = self.buscar
         os.makedirs(self.state, exist_ok=True)
         with open(os.path.join(self.state, "notify.cursor"), "w") as f:
@@ -256,3 +258,42 @@ class EstadoDaPr(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BuscaNoGh(VigiaCase):
+    def setUp(self):
+        super().setUp()
+        self.chamadas = []
+        self.antigas = [pr(numero=380, title="aberta antiga")]
+        self.recentes = [pr(numero=n) for n in range(500, 520)]
+        self.original = self.modulo.subprocess.run
+        self.modulo.subprocess.run = self.gh_falso
+        self.addCleanup(setattr, self.modulo.subprocess, "run", self.original)
+
+    def gh_falso(self, argv, **opcoes):
+        if argv[0] != "gh":
+            return self.original(argv, **opcoes)
+        self.chamadas.append(argv)
+        estado = argv[argv.index("--state") + 1]
+        lista = self.antigas + self.recentes if estado == "open" else self.recentes
+        return types.SimpleNamespace(returncode=0, stdout=json.dumps(lista), stderr="")
+
+    def test_pr_aberta_antiga_nao_se_perde_atras_das_recentes(self):
+        numeros = [p["number"] for p in self.buscar_real(self.repo)]
+        self.assertIn(380, numeros)
+        self.assertEqual(len(numeros), len(set(numeros)))
+
+    def test_pede_as_abertas_e_as_recentes_separadas(self):
+        self.buscar_real(self.repo)
+        pedidos = [(a[a.index("--state") + 1], a[a.index("--limit") + 1]) for a in self.chamadas]
+        self.assertEqual(pedidos, [("open", "300"), ("all", "60")])
+
+    def test_a_pr_antiga_fica_no_cache_e_avisa_quando_fica_pronta(self):
+        self.add_worker(branch="pi/antiga")
+        self.modulo.buscar = self.buscar_real
+        self.antigas = [pr(numero=380, headRefName="pi/antiga", checks=[dict(CINZA, name="Freios")])]
+        self.rodada()
+        self.antigas = [pr(numero=380, headRefName="pi/antiga", head="b" * 40, checks=[check("Freios", "SUCCESS"), check("Registro da PR", "FAILURE")])]
+        avisos = self.rodada()
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("Test#380", avisos[0])
