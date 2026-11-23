@@ -22,7 +22,7 @@ Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesqu
 
 Antes de trabalhar em um deles, rode `git pull` (o clone local fica atrás do GitHub) e leia o AGENTS.md dele. Os skills de um repo não carregam aqui: quando a tarefa pedir um, leia o `SKILL.md` dele em `.claude/skills/<nome>/` como arquivo e siga-o.
 
-Para delegar a agentes, cada um no seu worktree: `python scripts/crew.py --help`. Os caminhos e remotes dos repos estão em `repos.json`.
+Para delegar a agentes, cada um no seu worktree: `python scripts/crew.py --help`. Os caminhos e remotes dos repos estão em `repos.json`. Para o worker rodar na VPS, `spawn ... --host vps` (ou `"host": "vps"` do repo em `repos.json`); a VPS se refaz do zero com `tr -d '' < scripts/vps-setup.sh | ssh vps bash -s`.
 
 - Nova-AI (port do Nova AI para macOS + iPhone, em Electron).
 - PerpetualMiner (extensão Chrome que minera frases e as envia ao Anki).
