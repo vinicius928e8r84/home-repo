@@ -1,7 +1,3 @@
-// At the end of the chief's turn, with a worker open and the watcher dead, start the watcher again.
-// Silent when all is well; the chief hears only when the watcher cannot be restarted, once.
-// Only a chief runs it: a Herdr pane in the Home Repo, with no CREW_STATE_FILE (the worker's mark).
-// Pattern from firstmate's fm-primary-turnend-guard.ts; the check itself is `crew.py guard`.
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -19,7 +15,7 @@ export default function (pi: any) {
   pi.on("agent_settled", async () => {
     if (!cwd) return;
     if (followup) {
-      followup = false; // the turn this message started ends here: do not guard it again
+      followup = false;
       return;
     }
     const failure = await new Promise<string | undefined>((resolve) => {

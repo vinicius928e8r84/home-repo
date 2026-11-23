@@ -422,7 +422,7 @@ def progress_mark(meta):
         screen = str(herdr("agent", "pane", "read", meta["pane"], "--source", "recent-unwrapped", "--lines", "40"))
     except (Fail, KeyError):
         screen = ""
-    screen = re.sub(r"[⠀-⣿]", "", screen)
+    screen = re.sub(r"[\u2800-\u28ff]", "", screen)
     screen = re.sub(r"^.*Elapsed.*$", "", screen, flags=re.M)
     return head + chr(10) + screen
 
@@ -848,7 +848,6 @@ def cmd_watch(a):
 
 
 def cmd_guard(a):
-    """The end of a chief's turn must not leave an open worker with a dead watcher: start it again. Silent when all is well."""
     if not workers() or watcher_alive():
         return dict(ok=True, revived=False)
     start_watcher(my_pane("guard"))
