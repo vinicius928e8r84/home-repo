@@ -1,31 +1,3 @@
-// Verified against Pi 0.87.1 (docs/calm-mode-feasibility.md), which draws queued
-// "Steering:"/"Follow-up:" rows, their spacer, and the dequeue hint in
-// InteractiveMode.updatePendingMessagesDisplay from InteractiveMode.getAllQueuedMessages.
-// A Firstmate notification sent while a turn runs waits there before it is ever a chat row,
-// so ./fm-calm-operational-user-layout.ts never sees it. This adapter filters only what that
-// one listing reads; the queue Pi delivers from and persists is untouched.
-//
-// Hiding a queued row makes Pi's InteractiveMode.restoreQueuedMessagesToEditor (Escape during
-// a run, and the dequeue key) the one place hidden text could come back: stock Pi empties the
-// whole queue into the editor through clearAllQueues. Two rules are absolute: a notification
-// this adapter hid never reappears as raw text, and none is dropped to keep presentation
-// clean. Under Calm the restore hands only the other messages to the editor and puts the
-// hidden notifications back in the queue in their original order.
-//
-// Putting them back needs members that live on the session object rather than the
-// prototype, so they cannot be probed at install. Each session is checked on its first
-// queued-listing draw while Calm is on, before any row is hidden. A session missing any of them
-// gets no queued-row hiding at all and one warning; its rows and Escape stay stock.
-// See https://github.com/kunchenguid/firstmate/issues/1588.
-//
-// Pi 0.87.1 stops its run loop once a restore is followed by an abort (Escape, or navigating
-// the session tree during a run), so a queue that still holds messages when the aborted run
-// settles is not delivered until something else starts a turn. After any restore that kept
-// notifications in Pi's agent queue, this adapter waits for the session to settle and, if it
-// is idle with messages still queued, starts that turn itself with one generic status line.
-// A run that keeps going drains the queue itself, so nothing starts after a plain dequeue. A
-// notification kept only in the compaction queue is flushed by Pi when compaction ends, so
-// it neither counts toward that turn nor announces one.
 import * as PiCodingAgent from "@earendil-works/pi-coding-agent";
 import { calmPresentationHides } from "./fm-calm-visibility.ts";
 import { isFirstmateOperationalPresentationText } from "./fm-operational-input.ts";
@@ -86,14 +58,11 @@ export const CALM_QUEUE_RETENTION_SESSION_METHODS = [
   "sendUserMessage",
 ] as const;
 
-// Generic by design: no notification text, marker, kind, path, or identifier.
 export const CALM_QUEUED_ROWS_UNSUPPORTED_WARNING =
   "Firstmate Calm: this Pi session cannot keep queued messages across Escape, so queued Firstmate rows stay visible.";
 export const CALM_SUPERVISION_CONTINUES_NOTICE =
   "Firstmate supervision continues in a new turn.";
 
-// Keep the introduction-version symbol stable so a compatible upgrade cannot
-// double-patch a live process.
 const CALM_PENDING_OPERATIONAL_LAYOUT_PATCH = Symbol.for(
   "firstmate:calm-pending-operational-layout:pi-0.87.1",
 );
@@ -105,17 +74,9 @@ function settle(queued: unknown): void {
 type PendingState = {
   readonly patch: CalmPendingOperationalLayoutPatch;
   readonly retentionBySession: WeakMap<object, boolean>;
-  // The interactive mode that last drew queued rows, so a /calm toggle can redraw them.
   lastHost?: PendingRowsHost;
-  // What the latest draw of the queued listing actually hid, and for which session. The
-  // restore retains from this record rather than a fresh classification, so a row the
-  // captain never saw stays hidden even if the classifier cannot answer a second time.
   hidden?: { session: object; texts: Set<string> };
-  // Set only for the synchronous draw below, so every other reader of the queue still
-  // sees exactly what Pi queued.
   hidingInto?: Set<string>;
-  // Set only for the synchronous restore below, so any other clearAllQueues caller keeps
-  // Pi's stock semantics.
   restoring?: Restoring;
 };
 
@@ -176,17 +137,10 @@ function retainingSession(state: PendingState, host: PendingRowsHost): Retaining
   return supported ? (session as RetainingSession) : undefined;
 }
 
-// Delivers what a settled run left queued. Messages already in the queue cannot start a
-// turn by themselves, so the first is taken out and sent as the turn's prompt and the rest
-// are put back behind it: steering first, then follow-ups, the order Pi delivers them in.
 function continueWhenSettled(host: PendingRowsHost, session: RetainingSession): void {
   const settled = async (): Promise<boolean> => {
     do {
       await session.waitForIdle();
-      // Pi resolves idle waiters in microtasks, and tree navigation resumes from its
-      // abort in the same microtask run and marks the session busy before its first await.
-      // Yielding a macrotask lets that navigation claim the session, so the turn starts on
-      // the navigated branch instead of racing it on the abandoned one.
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (host.session !== session) return false;
     } while (!session.isIdle);
@@ -201,8 +155,6 @@ function continueWhenSettled(host: PendingRowsHost, session: RetainingSession): 
       for (const text of steering) settle(session._queueSteer(text));
       for (const text of followUp) settle(session._queueFollowUp(text));
       host.showStatus?.(CALM_SUPERVISION_CONTINUES_NOTICE);
-      // Pi rejects before recording the prompt when it cannot start the turn, so the
-      // message is queued again rather than lost.
       session.sendUserMessage(first).catch(() => settle(session._queueFollowUp(first)));
     })
     .catch(() => {});
@@ -245,8 +197,6 @@ function patchUpdatePendingMessagesDisplay(
     const texts = new Set<string>();
     state.hidingInto = texts;
     try {
-      // Pi skips the spacer and dequeue hint when nothing is left to list, so an
-      // all-operational queue draws no rows at all.
       original.call(this);
     } finally {
       state.hidingInto = undefined;
@@ -269,8 +219,6 @@ function patchClearAllQueues(
     const compaction = this.compactionQueuedMessages.filter((message) => retains(message.text));
     const cleared = original.call(this);
     if (steering.length + followUp.length + compaction.length === 0) return cleared;
-    // Pi's already-expanded queueing entry points: no input handler or template expansion
-    // runs a second time on text that already went through them once.
     for (const text of steering) settle(session._queueSteer(text));
     for (const text of followUp) settle(session._queueFollowUp(text));
     this.compactionQueuedMessages.push(...compaction);
@@ -288,8 +236,6 @@ function retainsHidden(
   hiddenTexts: Set<string> | undefined,
   hidesNow: boolean,
 ): (text: string) => boolean {
-  // A notification queued since the last draw was never shown either, so while Calm
-  // hides, it is kept the same way; classification is asked once per text.
   const answers = new Map<string, boolean>();
   return (text: string): boolean => {
     if (hiddenTexts?.has(text)) return true;
@@ -358,8 +304,6 @@ export function installCalmPendingOperationalLayout(): void {
   registry[CALM_PENDING_OPERATIONAL_LAYOUT_PATCH] = state.patch;
 }
 
-// Redraws the queued listing after a /calm toggle so rows already listed follow the new
-// choice at once instead of at the next queue change.
 export function refreshCalmPendingOperationalRows(): void {
   const registry = globalThis as typeof globalThis & {
     [key: symbol]: CalmPendingOperationalLayoutPatch | undefined;

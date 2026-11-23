@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""One command from a domain name to a live site: go.py <domain> [--site-dir DIR] [--profile P] [--ip IP] [--confirm-price USD]
+import glob, ipaddress, json, os, socket, subprocess, sys, tempfile, time, urllib.parse, zipfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import cf_domain as cf  # noqa: E402
+import aa_site as aa  # noqa: E402
+
+PLACEHOLDER = "<!doctype html><meta charset=utf-8><title>%s</title><p>%s</p>"
+
+USO = """One command from a domain name to a live site: go.py <domain> [--site-dir DIR] [--profile P] [--ip IP] [--confirm-price USD]
 
 Resumable and idempotent: rerun after any stop. Steps, each printed as one line:
   1 zone   a zone already on our Cloudflare account skips the purchase (a domain bought elsewhere and added as a zone lands here)
@@ -11,14 +20,6 @@ Resumable and idempotent: rerun after any stop. Steps, each printed as one line:
   7 verify HTTPS from outside
 Exit codes: 0 live, 2 not registrable, 3 buy it on Hostinger (not on Cloudflare), 4 price shown, confirmation needed, 5 no VPS registered, 6 several VPS (pass --profile), 7 a step failed.
 """
-import glob, ipaddress, json, os, socket, subprocess, sys, tempfile, time, urllib.parse, zipfile
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import cf_domain as cf  # noqa: E402
-import aa_site as aa  # noqa: E402
-
-PLACEHOLDER = "<!doctype html><meta charset=utf-8><title>%s</title><p>%s</p>"
 
 
 def say(step, msg):
@@ -44,7 +45,6 @@ def public_ip(host):
 
 
 def cert_ok(domain, ip):
-    """True when the origin already serves a certificate for the domain with more than 20 days left."""
     cmd = "echo | openssl s_client -connect %s:443 -servername %s 2>/dev/null | openssl x509 -noout -subject -checkend 1728000" % (ip, domain)
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout
     return ("CN = " + domain) in out and "will not expire" in out
@@ -180,7 +180,7 @@ def verify_live(domain):
 
 def main(a):
     if not a or a[0].startswith("-"):
-        sys.exit(__doc__)
+        sys.exit(USO)
     domain = a[0].lower()
     opt = dict(zip(a[1::2], a[2::2]))
 

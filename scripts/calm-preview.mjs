@@ -1,44 +1,34 @@
-// Preview of candidate replacements for Calm's working animation.
-//
-//   node scripts/calm-preview.mjs            animated, Ctrl+C to stop
-//   node scripts/calm-preview.mjs 4 6 9      only those candidates
-//   node scripts/calm-preview.mjs --frames   three still frames per candidate
-//
-// Each candidate keeps the boat's geometry (a 3-cell top over a 5-cell base that
-// bounces along one line of bars), so the chosen one drops into
-// .pi/extensions/lib/fm-calm-working-ship-sprite.ts by changing glyphs and colors.
-
 const SKINS = [
   {
     name: "1. Carrinho de mina",
     top: "▗▆▖",
     base: "╘o═o╛",
     bars: ["▁", "▁", "▂", "▃"],
-    sprite: "\x1b[33m", // yellow
-    ground: "\x1b[90m", // gray
+    sprite: "\x1b[33m",
+    ground: "\x1b[90m",
   },
   {
     name: "2. Tocha na caverna",
     top: "◢▲◣",
     base: "▁▐█▌▁",
     bars: ["▁", "▂", "▄", "▆"],
-    sprite: "\x1b[31m", // red
-    ground: "\x1b[35m", // magenta
+    sprite: "\x1b[31m",
+    ground: "\x1b[35m",
   },
   {
     name: "3. Nova",
     top: "╲│╱",
     base: "─╼█╾─",
     bars: [" ", "·", "·", "∙"],
-    sprite: "\x1b[36m", // cyan
-    ground: "\x1b[37m", // white
+    sprite: "\x1b[36m",
+    ground: "\x1b[37m",
   },
   {
     name: "4. Impressora de dinheiro (brrr)",
     top: "$$$",
     base: "[BRR]",
     bars: ["▁", "▁", "$", "$"],
-    sprite: "\x1b[32m", // green
+    sprite: "\x1b[32m",
     ground: "\x1b[32m",
   },
   {
@@ -46,16 +36,16 @@ const SKINS = [
     top: "◢▲◣",
     base: "[TOK]",
     bars: ["▁", "·", "¢", "$"],
-    sprite: "\x1b[31m", // red
-    ground: "\x1b[33m", // yellow
+    sprite: "\x1b[31m",
+    ground: "\x1b[33m",
   },
   {
     name: "6. Starship",
     top: "╱▲╲",
     base: "▐█X█▌",
     bars: ["▁", "▃", "▅", "▇"],
-    sprite: "\x1b[37m", // white
-    ground: "\x1b[33m", // yellow exhaust
+    sprite: "\x1b[37m",
+    ground: "\x1b[33m",
   },
   {
     name: "7. Starship explodindo (RUD)",
@@ -70,7 +60,7 @@ const SKINS = [
     top: "·┬·",
     base: "[o_o]",
     bars: [" ", "0", "1", "1"],
-    sprite: "\x1b[36m", // cyan
+    sprite: "\x1b[36m",
     ground: "\x1b[32m",
   },
   {
@@ -86,7 +76,7 @@ const SKINS = [
     top: "   ",
     base: "8===D",
     bars: [" ", " ", "~", "~"],
-    sprite: "\x1b[35m", // magenta
+    sprite: "\x1b[35m",
     ground: "\x1b[36m",
   },
   {
@@ -132,8 +122,6 @@ function state(tick) {
   const position = moves <= span ? moves : span * 2 - moves;
   return { position, direction: moves < span ? 1 : -1, phase: tick % TICKS_PER_MOVE };
 }
-
-// --- Scenes: candidates with their own per-tick animation, beyond a fixed sprite. ---
 
 const C = { cyan: "\x1b[36m", green: "\x1b[32m", yellow: "\x1b[33m", red: "\x1b[31m", blue: "\x1b[34m", magenta: "\x1b[35m", white: "\x1b[37m", gray: "\x1b[90m" };
 
@@ -201,7 +189,6 @@ function robotSituation(position, direction, coins, passed) {
   };
 }
 
-// 11. The robot rides a river of bits, eats the $ in its way, sweats, sparks, blinks and trips on a bug.
 function robotScene(tick) {
   const [top, base] = canvas();
   const { position, direction } = bounce(tick, WIDTH - 5);
@@ -217,7 +204,6 @@ function robotScene(tick) {
   put(base, position, face, onBug ? C.red : C.cyan);
   put(top, position + 1, speech, onBug ? C.red : coinAhead ? C.yellow : C.cyan);
 
-  // Sweat flying off the head, behind the robot.
   paintSweat(top, tick, position, direction);
   return paint([top, base]);
 }
@@ -254,7 +240,6 @@ function paintAdult(base, position, direction, length) {
   return { start, tip: direction === 1 ? start + length + 1 : start };
 }
 
-// 12. Grows, fires, droops, and turns around at the edges; a blue pill on the way makes it longer.
 function adultScene(tick) {
   const [top, base] = canvas();
   const { position, direction } = bounce(tick, WIDTH - 8);
@@ -276,7 +261,6 @@ function adultScene(tick) {
 SKINS.push({ name: "11. IA trabalhando por você (animada)", scene: robotScene });
 SKINS.push({ name: "12. +18 (animado)", scene: adultScene });
 
-// Numbers on the command line pick which candidates to show; none shows them all.
 const picked = process.argv.slice(2).filter((arg) => /^\d+$/.test(arg));
 const SHOWN = picked.length ? SKINS.filter((skin) => picked.includes(skin.name.split(".")[0])) : SKINS;
 
@@ -293,7 +277,6 @@ function draw(tick) {
   return out;
 }
 
-// --frames prints stills and exits; --frames=16,96 picks the ticks.
 const stills = process.argv.find((arg) => arg.startsWith("--frames"));
 if (stills) {
   const ticks = stills.includes("=") ? stills.split("=")[1].split(",").map(Number) : [8, 60, 130];

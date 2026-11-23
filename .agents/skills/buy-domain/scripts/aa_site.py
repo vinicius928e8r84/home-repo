@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""aaPanel site and certificate steps for the buy-domain skill (uses the aapanel skill's client and saved profile).
+import json, os, sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.expanduser("~/.agents/skills/aapanel"))
+from aa_client import AaPanel  # noqa: E402
+
+USO = """aaPanel site and certificate steps for the buy-domain skill (uses the aapanel skill's client and saved profile).
 
   aa_site.py <profile> ensure <domain>   create the static site <domain> (+ www) when missing; root /www/wwwroot/<domain>
   aa_site.py <profile> cert <domain>     issue a Let's Encrypt certificate for <domain> + www by file validation and install it
@@ -8,11 +14,6 @@
 A profile is a file ~/.config/aapanel/servers/<profile>.json. Run with python3 -I.
 The domain must already resolve to this server (or through the Cloudflare proxy) before `cert`.
 """
-import json, os, sys
-from pathlib import Path
-
-sys.path.insert(0, os.path.expanduser("~/.agents/skills/aapanel"))
-from aa_client import AaPanel  # noqa: E402
 
 
 def login(profile):
@@ -82,12 +83,12 @@ COMMANDS = {"ensure": cmd_ensure, "cert": cmd_cert, "remove": cmd_remove}
 
 def main(a):
     if len(a) != 3:
-        sys.exit(__doc__)
+        sys.exit(USO)
     profile, cmd, dom = a
     p, h = login(profile)
     s = site(p, h, dom)
     if cmd not in COMMANDS:
-        sys.exit(__doc__)
+        sys.exit(USO)
     COMMANDS[cmd](p, h, dom, s)
 
 

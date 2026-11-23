@@ -30,9 +30,6 @@ export function firstmateShellInvocation(
     : { command: script, args: [...args] };
 }
 
-// The one owner of how each command is invoked and how its exit status and
-// stdout become an answer, shared by the synchronous and awaited callers
-// below so the two can never drift.
 function operationalInputArgs(
   command: OperationalInputCommand,
   kind?: FirstmateCurrentOperationalKind,
@@ -83,14 +80,6 @@ export function encodeFirstmateOperationalInput(
   return encoded;
 }
 
-// The supervision branch encodes on Pi's render thread while a captain
-// outcome is being delivered, so that one caller must await the child rather
-// than stop the TUI for it. It supplies the wait; everything that makes this
-// an encode - the script, its argument shape, and how its exit status and
-// stdout become an answer - stays owned here, so the two forms cannot drift.
-// The runner is a parameter rather than an import so that every extension
-// already carrying this module does not also have to carry a spawn helper it
-// never calls.
 export type OperationalInputRunner = (
   command: string,
   args: readonly string[],
@@ -122,14 +111,8 @@ export function classifyFirstmateCurrentOperationalText(
   return runOperationalInputCommand("kind", content);
 }
 
-// The only legacy operational shape Calm presentation hides on top of the current
-// typed kinds. The broader `classify` legacy set stays out: its bare forms are text a
-// captain can type, so hiding them would hide real input.
 const LEGACY_CALM_OPERATIONAL_PREFIX = "\u2063Supervisor escalate (";
 
-// Single owner of "may Calm presentation hide this exact input?", shared by the
-// transcript-row and queued-row adapters so the two can never disagree about a message.
-// Text without the U+2063 marker answers here without spawning the classifier.
 export function isFirstmateOperationalPresentationText(text: string): boolean {
   if (!text.includes("\u2063")) return false;
   return (

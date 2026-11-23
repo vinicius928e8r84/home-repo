@@ -1,8 +1,3 @@
-"""Check model_routing.json against the models this machine's Pi can reach.
-
-Usage: python -I scripts/check_routing.py
-Exit 0 when every route names a model Pi lists and a valid thinking level; 1 otherwise.
-"""
 import json
 import os
 import shutil
@@ -11,6 +6,11 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEVELS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
+USO = """Check model_routing.json against the models this machine's Pi can reach.
+
+Usage: python -I scripts/check_routing.py
+Exit 0 when every route names a model Pi lists and a valid thinking level; 1 otherwise.
+"""
 
 
 def pi_models():
@@ -53,6 +53,9 @@ def settings_problems(pi_settings, routes):
 
 
 def main():
+    if sys.argv[1:] and sys.argv[1] in ("-h", "--help"):
+        print(USO, end="")
+        return
     cfg = json.load(open(os.path.join(ROOT, "model_routing.json"), encoding="utf-8"))
     routes = cfg.get("routes", {})
     models = pi_models()

@@ -1,22 +1,6 @@
-// The Home Repo's Calm working animation: a robot riding a river of bits.
-//
-// It replaces Firstmate's boat (./fm-calm-working-ship-sprite.ts, kept untouched) and
-// exports the same names and the same sprite contract, so ./fm-calm-working-ship.ts
-// switches between the two by changing one import path.
-//
-// The scene: the robot bounces along a stream of 0s and 1s. Sweat flies off its head
-// behind it and its antenna sparks. A `$` ahead turns its eyes into `$_$`; the coin is
-// spent once passed and comes back on the next sweep. A bug sits mid-track: on it the
-// robot shows `[x_x]` under a `404`, and leaves with `[>_<]` and an "ops".
-//
-// Every glyph is one terminal column, so widths are plain character counts. Ticks, not
-// wall-clock time, drive every change, so a frozen sprite resumes exactly where it stopped.
-
-/** Scheduler period. One tick advances the bit stream; every fourth moves the robot. */
 export const CALM_WORKING_SHIP_TICK_MS = 220;
 export const CALM_WORKING_SHIP_TICKS_PER_MOVE = 4;
 
-/** `plain` is uncolored padding; the harness maps every other class to a color. */
 export type CalmWorkingShipColor = "plain" | "bits" | "robot" | "coin" | "alert" | "sweat" | "dim";
 
 export type CalmWorkingShipRun = {
@@ -24,7 +8,6 @@ export type CalmWorkingShipRun = {
   readonly color: CalmWorkingShipColor;
 };
 
-/** One painted frame: one or two rows of runs, each row exactly the requested width. */
 export type CalmWorkingShipFrame = readonly (readonly CalmWorkingShipRun[])[];
 
 export type CalmWorkingShipSprite = {
@@ -55,7 +38,6 @@ function put(row: Cell[], column: number, text: string, color: CalmWorkingShipCo
   });
 }
 
-/** Merge neighbouring cells of one color into runs. */
 function toRuns(row: Cell[]): CalmWorkingShipRun[] {
   const runs: { text: string; color: CalmWorkingShipColor }[] = [];
   for (const [glyph, color] of row) {
@@ -140,7 +122,6 @@ function paintScene(base: Cell[], top: Cell[], pose: Pose): void {
   put(base, pose.position, look.face, look.onBug ? "alert" : "robot");
   put(top, pose.position + 1, look.speech, look.color);
 
-  // Sweat flying off the head, behind the robot.
   paintSweat(top, pose);
 }
 
