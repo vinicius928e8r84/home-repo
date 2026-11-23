@@ -10,7 +10,7 @@ Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesqu
 
 ## Teto de tamanho
 
-Nenhum arquivo passa de ~5.000 tokens (bytes / 4), para caber inteiro na leitura e na edição de um agente. O pre-commit (`.githooks/pre-commit` → `scripts/check_file_tokens.py`) recusa o arquivo novo ou alterado acima disso. Ligue uma vez por clone: `git config core.hooksPath .githooks`. Ao ser recusado, divida pelas costuras (grupos de funções que mudam juntos); nunca apague código nem o esprema em menos linhas.
+Arquivo acima de ~5.000 tokens (bytes / 4) não é commitado: divida pelas costuras, nunca espremendo código; ligue o hook uma vez por clone com `git config core.hooksPath .githooks`.
 
 ## Wiki
 
