@@ -294,6 +294,13 @@ class AgentIsPi(CrewCase):
         self.watch()
         self.assertEqual(len([e for e in self.events() if e["kind"] == "not_pi"]), 1, "flagged once")
 
+    def test_board_lists_it_as_a_problem(self):
+        self.add_worker(agent="claude")
+        with contextlib.redirect_stdout(io.StringIO()):
+            board = self.crew.cmd_board(types.SimpleNamespace(json=True))
+        self.assertEqual([m["name"] for m in board["trouble"]], ["t-job"])
+        self.assertEqual(board["running"], [])
+
     def test_a_pi_worker_is_fine(self):
         self.add_worker(agent="pi")
         self.watch()

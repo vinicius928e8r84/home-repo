@@ -876,7 +876,7 @@ def main():
     s.add_argument("name")
     s.add_argument("--force", action="store_true", help="close an unmerged worker, or one whose worktree git cannot remove (the folder is deleted if it is inside ~/worktrees); its branch is kept")
     s.set_defaults(fn=cmd_close)
-    s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls and closed panes, and tells the chief. spawn starts it")
+    s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls, workers that never started, panes that died or stopped being Pi, and tells the chief. spawn starts it")
     s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")
     s.add_argument("--every", type=int, default=20, help="seconds between checks")
     s.add_argument("--stall", type=int, default=20, help="minutes one turn may run before it counts as stalled")
