@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+from unittest import mock
 
 from scripts.freios.apoio_de_teste import RepositorioTemporario
 from scripts.freios.git import (
@@ -74,6 +77,18 @@ class TesteDoGit(unittest.TestCase):
         ctx = montar_contexto(self.repo.raiz, "commit", "origin/main")
         self.assertEqual([e.caminho for e in ctx.alvos], ["b.md"])
         self.assertEqual(sorted(ctx.arquivos), ["a.md", "b.md"])
+
+
+class TesteDeIsolamento(unittest.TestCase):
+    def test_repositorio_temporario_ignora_git_dir_herdado_e_devolve_o_ambiente(self):
+        with tempfile.TemporaryDirectory() as pasta, mock.patch.dict(os.environ, {"GIT_DIR": pasta}):
+            repo = RepositorioTemporario()
+            self.assertNotIn("GIT_DIR", os.environ)
+            repo.adicionar("a.md", "a" + chr(10))
+            repo.commitar("um")
+            self.assertEqual(os.listdir(pasta), [])
+            repo.limpar()
+            self.assertEqual(os.environ["GIT_DIR"], pasta)
 
 
 if __name__ == "__main__":

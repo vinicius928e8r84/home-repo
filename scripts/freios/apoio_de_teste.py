@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -30,6 +31,7 @@ def contexto_de_memoria(arquivos, links=None, limites=None, excecoes=None, raiz=
 
 class RepositorioTemporario:
     def __init__(self):
+        self._herdadas = {n: os.environ.pop(n) for n in list(os.environ) if n.startswith("GIT_")}
         self._pasta = tempfile.TemporaryDirectory()
         self.raiz = Path(self._pasta.name)
         self.git("init", "-q", "-b", "main")
@@ -65,3 +67,4 @@ class RepositorioTemporario:
 
     def limpar(self):
         self._pasta.cleanup()
+        os.environ.update(self._herdadas)
