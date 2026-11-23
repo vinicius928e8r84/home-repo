@@ -21,9 +21,9 @@ Este documento é só o plano. Parte da `main` em `fbc296c` (`crew.py` com 943 l
 
 1. O painel só lê arquivos. Quem chama `herdr`, `git` e `gh` é o vigia, que grava o que viu; o painel lê em menos de 1 s com 45 workers.
 2. Números vêm de dado estruturado (sessão do Pi, `meta.json`, `state.json`, catálogo do Pi), nunca da tela.
-3. Tudo determinístico vai para Python com teste (`test_crew.py`); o skill do chief guarda só o que não dá para checar.
+3. Tudo determinístico vai para Python com teste, cada módulo novo com o seu arquivo (`test_crew_conversa.py`, `test_crew_painel.py`, `test_crew_metricas.py`…): o `test_crew.py` está em 19.999 bytes, perto do teto de 20.000, e fora de `excecoes.json`. O skill do chief guarda só o que não dá para checar.
 4. Não duplicar a frota durável: o painel mostra os estados que ela cria ("PAROU por X", "em risco: X"); não os detecta de novo.
-5. Código novo nasce em módulos (`crew_painel.py` e afins), como o `crew_remote.py` da PR #11: a catraca reprova `crew.py` maior (D49, D55).
+5. Código novo nasce em módulos (`crew_painel.py` e afins), como o `crew_remote.py` da PR #11: o `crew.py` está em `excecoes.json` até ser dividido (D49), então nenhum freio o barra se crescer, e é por isso que o código novo vai para módulo: o `crew.py` só ganha a ligação e perde o que migra.
 
 ## 1. Painel do time: `crew.py time`
 
@@ -165,20 +165,20 @@ O que dá para fazer em código vai para o código: o bloco "Suas decisões" do 
 
 ## 8. Ordem das PRs
 
-Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro agente e Prova real. A divisão do `crew.py` (item 8 da ordem de merge do chief) vem antes, porque a catraca reprova o `crew.py` maior.
+Toda PR mexe em caminho sensível do Registro: é ALTA, com revisão de outro agente e Prova real. A divisão do `crew.py` não é pré-requisito: o arquivo está em `excecoes.json` até ser dividido, e o código novo nasce em módulo sem esperá-la. Se o dono quiser a divisão antes, ela precisa de uma tarefa própria.
 
 | # | PR | Mexe em | Depende de | Teste |
 |---|---|---|---|---|
-| 1 | `ask --para`, Perguntas ao chief, `subir`, `tell chief`; brief novo | `crew_conversa.py`, `crew.py`, `test_crew.py` | divisão do `crew.py` | worker falso pergunta ao chief: inbox recebe na hora; `subir` vira Decisão; `tell chief` grava no inbox |
-| 2 | Painel `time`: sessão do Pi, catálogo, ordem das linhas; o Quadro usa as mesmas linhas | `crew_painel.py`, `crew.py`, `test_crew.py` | 1 (estado "espera chief") | sessões `.jsonl` de exemplo tiradas das reais (com `/new` e com compactação); 45 workers falsos em menos de 1 s |
+| 1 | `ask --para`, Perguntas ao chief, `subir`, `tell chief`; brief novo | `crew_conversa.py`, `crew.py`, `test_crew_conversa.py` | — | worker falso pergunta ao chief: inbox recebe na hora; `subir` vira Decisão; `tell chief` grava no inbox |
+| 2 | Painel `time`: sessão do Pi, catálogo, ordem das linhas; o Quadro usa as mesmas linhas | `crew_painel.py`, `crew.py`, `test_crew_painel.py` | 1 (estado "espera chief") | sessões `.jsonl` de exemplo tiradas das reais (com `/new` e com compactação); 45 workers falsos em menos de 1 s |
 | 3 | Cota da conta Claude: `crew-cota.ts`, linha no painel, avisos de 80%, limite e Extra Usage | `.pi/extensions/crew-cota.ts`, `crew_painel.py`, `crew.py` | 2 | cabeçalhos reais gravados viram o `cota.json` esperado; relógio falso: um aviso por janela até o reset |
 | 4 | Cache de PRs do vigia e coluna PR, head, o que espera | `crew_painel.py`, `crew.py` | 2 | saídas de `gh` gravadas em arquivo: cada caso de "espera" |
-| 5 | Supervisão filtrada, resumo de 30 min, PR pronta para revisão e para merge, regras de chat do chief | `crew.py`, `chief-of-staff/SKILL.md`, `test_crew.py` | 4, frota PR 2 | relógio falso: o resumo sai a cada 30 min só com novidade; `merged` não acorda; aviso sem título reprova |
+| 5 | Supervisão filtrada, resumo de 30 min, PR pronta para revisão e para merge, regras de chat do chief | `crew.py`, `chief-of-staff/SKILL.md`, `test_crew_supervisao.py` | 4, frota PR 2 | relógio falso: o resumo sai a cada 30 min só com novidade; `merged` não acorda; aviso sem título reprova |
 | 6 | Categoria no Registro da PR e no template | `scripts/freios/`, `.github/PULL_REQUEST_TEMPLATE.md` | #14 mesclada | casos do `test_registro_da_pr.py`: sem linha, duas linhas, valor fora da lista, valor com acento, lista trocada no `categorias.json` |
 | 7 | Fila de decisões do dono na página lavish e respostas pelo vigia | `crew_decisoes.py`, `crew.py` | 1, 5 | saída de `poll` gravada vira `answer` e aviso ao chief; Prova real: uma rodada com o dono |
 | 8 | Métricas: linha no `close`, `metricas`, `--recolher` | `crew_metricas.py`, `crew.py` | 2, 6 | sessões de exemplo: somas e compactações batem com a conta à mão |
 
-Com a frota durável, a ordem sugerida é: divisão do `crew.py` → painel 1 → painel 2 → painel 3 → frota 1 → frota 2 → painel 4 → painel 5 → painel 6 (assim que a #14 entrar) → frota 3 a 9 e painel 7 e 8, intercalados. Painel 5 e frota 2 mexem no mesmo `notify`; quem vier depois rebaseia. O aviso de cota da PR 3 entra direto como motivo de acordar, sem esperar a PR 5.
+Com a frota durável, a ordem sugerida é: painel 1 → painel 2 → painel 3 → frota 1 → frota 2 → painel 4 → painel 5 → painel 6 (assim que a #14 entrar) → frota 3 a 9 e painel 7 e 8, intercalados. Painel 5 e frota 2 mexem no mesmo `notify`; quem vier depois rebaseia. O aviso de cota da PR 3 entra direto como motivo de acordar, sem esperar a PR 5.
 
 ## O que pode ser cortado
 
