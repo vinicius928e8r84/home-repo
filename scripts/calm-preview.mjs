@@ -1,6 +1,7 @@
 // Preview of candidate replacements for Calm's working animation.
 //
 //   node scripts/calm-preview.mjs            animated, Ctrl+C to stop
+//   node scripts/calm-preview.mjs 4 6 9      only those candidates
 //   node scripts/calm-preview.mjs --frames   three still frames per candidate
 //
 // Each candidate keeps the boat's geometry (a 3-cell top over a 5-cell base that
@@ -31,6 +32,62 @@ const SKINS = [
     bars: [" ", "·", "·", "∙"],
     sprite: "\x1b[36m", // cyan
     ground: "\x1b[37m", // white
+  },
+  {
+    name: "4. Impressora de dinheiro (brrr)",
+    top: "$$$",
+    base: "[BRR]",
+    bars: ["▁", "▁", "$", "$"],
+    sprite: "\x1b[32m", // green
+    ground: "\x1b[32m",
+  },
+  {
+    name: "5. Queimando token",
+    top: "◢▲◣",
+    base: "[TOK]",
+    bars: ["▁", "·", "¢", "$"],
+    sprite: "\x1b[31m", // red
+    ground: "\x1b[33m", // yellow
+  },
+  {
+    name: "6. Starship",
+    top: "╱▲╲",
+    base: "▐█X█▌",
+    bars: ["▁", "▃", "▅", "▇"],
+    sprite: "\x1b[37m", // white
+    ground: "\x1b[33m", // yellow exhaust
+  },
+  {
+    name: "7. Starship explodindo (RUD)",
+    top: "╲│╱",
+    base: "*RUD*",
+    bars: [" ", ".", "'", "*"],
+    sprite: "\x1b[31m",
+    ground: "\x1b[33m",
+  },
+  {
+    name: "8. A IA trabalhando por você",
+    top: "·┬·",
+    base: "[o_o]",
+    bars: [" ", "0", "1", "1"],
+    sprite: "\x1b[36m", // cyan
+    ground: "\x1b[32m",
+  },
+  {
+    name: "9. Aqui jaz o seu saldo",
+    top: "┌┼┐",
+    base: "│RIP│",
+    bars: ["▁", "▁", "▂", "▂"],
+    sprite: "\x1b[37m",
+    ground: "\x1b[32m",
+  },
+  {
+    name: "10. +18",
+    top: "   ",
+    base: "8===D",
+    bars: [" ", " ", "~", "~"],
+    sprite: "\x1b[35m", // magenta
+    ground: "\x1b[36m",
   },
   {
     name: "0. Barco (atual)",
@@ -76,9 +133,13 @@ function state(tick) {
   return { position, direction: moves < span ? 1 : -1, phase: tick % TICKS_PER_MOVE };
 }
 
+// Numbers on the command line pick which candidates to show; none shows them all.
+const picked = process.argv.slice(2).filter((arg) => /^\d+$/.test(arg));
+const SHOWN = picked.length ? SKINS.filter((skin) => picked.includes(skin.name.split(".")[0])) : SKINS;
+
 function draw(tick) {
   const out = [];
-  for (const skin of SKINS) {
+  for (const skin of SHOWN) {
     const { position, direction, phase } = state(tick);
     out.push(skin.name, ...frame(skin, position, direction, phase), "");
   }
