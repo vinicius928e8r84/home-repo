@@ -30,16 +30,21 @@ import {
   type CalmWorkingShipColor,
   type CalmWorkingShipRun,
   type CalmWorkingShipSprite,
-} from "./fm-calm-working-ship-sprite.ts";
+} from "./crew-calm-robot-sprite.ts";
+// Home Repo change: the sprite is the robot scene. Firstmate's boat is still in
+// ./fm-calm-working-ship-sprite.ts; to go back, import from it and restore its two
+// colors here (water: blue 34, boat: yellow 33).
 
 export { CALM_WORKING_SHIP_TICK_MS, CALM_WORKING_SHIP_TICKS_PER_MOVE };
 
 // Standard ANSI foreground codes only: no theme lookup, bright variant, or 256/RGB.
-// Water is a single blue so the swell reads through glyph height alone; the boat is a
-// single yellow so its sail halves, mast, and hull never split into mismatched colors.
 const ANSI_FOREGROUND: Record<Exclude<CalmWorkingShipColor, "plain">, string> = {
-  water: "\u001b[34m",
-  boat: "\u001b[33m",
+  bits: "\u001b[32m",
+  robot: "\u001b[36m",
+  coin: "\u001b[33m",
+  alert: "\u001b[31m",
+  sweat: "\u001b[34m",
+  dim: "\u001b[90m",
 };
 // Restores the default foreground so color never bleeds into padding or later frames.
 const RESET = "\u001b[39m";
