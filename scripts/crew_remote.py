@@ -26,12 +26,13 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument("question")
 parser.add_argument("--recommend", required=True)
+parser.add_argument("--para", choices=["chief", "dono"], default="chief")
 args = parser.parse_args()
 state_file = os.environ.get("CREW_STATE_FILE")
 if not state_file:
     print(json.dumps(dict(ok=False, step="ask", error="CREW_STATE_FILE is not set: run this from the worker's own pane")))
     sys.exit(1)
-entry = dict(at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), question=args.question, recommend=args.recommend)
+entry = dict(at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), question=args.question, recommend=args.recommend, para=args.para)
 with open(os.path.join(os.path.dirname(state_file), "asks.jsonl"), "a", encoding="utf-8") as f:
     f.write(json.dumps(entry, ensure_ascii=False) + "\\n")
 print(json.dumps(dict(ok=True, next="keep working on everything that does not depend on this; the answer arrives as a [chief] message")))
@@ -131,10 +132,7 @@ def mirror(path, text):
 
 def register_ask(meta, line):
     ask = json.loads(line)
-    entry = dict(id="D%d" % (len(crew.decisions()) + 1), at=crew.now(), worker=meta["name"], repo=meta["repo"],
-                 question=ask["question"], recommend=ask.get("recommend"), status="open")
-    crew.log_decision(entry)
-    crew.emit("decision_needed", meta["name"], id=entry["id"], question=entry["question"])
+    crew.module("crew_conversa").register(meta["name"], meta["repo"], dict(question=ask["question"], recommend=ask.get("recommend")), ask.get("para", "dono"))
 
 
 def register_asks(meta, text):

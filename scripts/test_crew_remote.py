@@ -202,7 +202,7 @@ class RemoteCrewTest(unittest.TestCase):
         remote = self.vps + "/crew-state/home-toy"
         with open(remote + "/report.md", "w", encoding="utf-8") as f:
             f.write("**Resultado**: feito\n")
-        ask = subprocess.run([sys.executable, remote + "/ask.py", "posso?", "--recommend", "sim"], capture_output=True, text=True,
+        ask = subprocess.run([sys.executable, remote + "/ask.py", "posso?", "--recommend", "sim", "--para", "dono"], capture_output=True, text=True,
                              env=dict(os.environ, CREW_STATE_FILE=remote + "/state.json"))
         self.assertEqual(json.loads(ask.stdout)["ok"], True, ask)
         self.crew("board", "--json")
@@ -218,6 +218,16 @@ class RemoteCrewTest(unittest.TestCase):
         sent = [entry for entry in self.herdr_log() if entry[:2] == ["pane", "send-text"]][-1]
         self.assertEqual(sent[2], "w1:p2")
         self.assertIn("pode", sent[3])
+
+    def test_an_ask_without_para_from_the_host_is_a_question_to_the_chief(self):
+        self.spawn()
+        remote = self.vps + "/crew-state/home-toy"
+        ask = subprocess.run([sys.executable, remote + "/ask.py", "qual?", "--recommend", "a"], capture_output=True, text=True,
+                             env=dict(os.environ, CREW_STATE_FILE=remote + "/state.json"))
+        self.assertEqual(json.loads(ask.stdout)["ok"], True, ask)
+        board, _ = self.crew("board", "--json")
+        self.assertEqual(board["decisions"], [])
+        self.assertEqual([(q["id"], q["question"]) for q in board["questions"]], [("P1", "qual?")])
 
     def test_tell_and_read_go_to_the_host_pane(self):
         self.spawn()

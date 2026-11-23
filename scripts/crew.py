@@ -7,8 +7,8 @@ chief's pane inside Herdr.
   python scripts/crew.py board                      the whole fleet: decisions waiting, running, to review
   python scripts/crew.py spawn <repo> <task> --type implement --request "..." --done "..."
   python scripts/crew.py spawn <repo> <task> --host vps ...   (the worker runs on that ssh host: scripts/crew_remote.py)
-  python scripts/crew.py ask "question" --recommend "..."     (a worker asks the owner)
-  python scripts/crew.py answer D3 "the owner's answer"
+  python scripts/crew.py ask "question" --recommend "..." --para chief|dono   (a worker asks the chief or the owner)
+  python scripts/crew.py answer D3 "the owner's answer"   (P3: the chief answers)
   python scripts/crew.py status
   python scripts/crew.py events
   python scripts/crew.py tell <name> "message"
@@ -477,21 +477,6 @@ def log_decision(entry):
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def cmd_ask(a):
-    name = a.worker or os.environ.get("CREW_AGENT_NAME")
-    if name:
-        repo = read_meta(name)["repo"]
-    elif a.repo:
-        name, repo = "chief", a.repo
-    else:
-        raise Fail("ask", "run this from a worker's pane, or pass --worker, or --repo for a decision of the chief's own")
-    number = len(decisions()) + 1
-    entry = dict(id="D%d" % number, at=now(), worker=name, repo=repo, question=a.question, recommend=a.recommend, status="open")
-    log_decision(entry)
-    emit("decision_needed", name, id=entry["id"], question=a.question)
-    return dict(ok=True, id=entry["id"], next="keep working on everything that does not depend on this; the answer arrives as a [chief] message")
-
-
 def cmd_answer(a):
     entry = decisions().get(a.id.upper())
     if not entry:
@@ -507,7 +492,7 @@ def cmd_answer(a):
     if meta.get("closed") or worker_state(meta) == "gone":
         note = "the worker is closed; the answer is recorded but nobody is acting on it"
     else:
-        send("prompt", meta["pane"], "[chief] Decisão %s (%s): %s" % (entry["id"], entry["question"], a.answer))
+        send("prompt", meta["pane"], "[chief] %s %s (%s): %s" % (module("crew_conversa").label(entry), entry["id"], entry["question"], a.answer))
         delivered = True
     return dict(ok=True, id=entry["id"], worker=entry["worker"], delivered=delivered, note=note)
 
@@ -543,14 +528,15 @@ def result_of(meta):
 def cmd_board(a):
     ensure_watcher()
     everyone = workers(True)
-    open_decisions = [d for d in decisions().values() if d.get("status") == "open"]
+    open_all = [d for d in decisions().values() if d.get("status") == "open"]
+    open_decisions = module("crew_conversa").open_for_owner(open_all)
     running, review, trouble = [], [], []
     for meta in everyone:
         if meta.get("closed"):
             continue
         snap = snapshot(meta, False, 20)
         meta["_snap"], meta["_result"] = snap, result_of(meta)
-        waiting = [d["id"] for d in open_decisions if d["worker"] == meta["name"]]
+        waiting = [d["id"] for d in open_all if d["worker"] == meta["name"]]
         if meta.get("error") or snap["state"] in ("gone", "starting") or snap["stalled"] or snap["not_pi"]:
             trouble.append(meta)
         elif snap["state"] == "working":
@@ -563,9 +549,10 @@ def cmd_board(a):
             trouble.append(meta)
     if a.json:
         slim = lambda m: dict(name=m["name"], repo=m["repo"], type=m["type"], task=m["task"], state=m["_snap"]["state"], result=m["_result"], report=m["report"], branch=m["branch"], merged=m["_snap"]["merged"])
-        return dict(ok=True, decisions=open_decisions, running=[slim(m) for m in running], review=[slim(m) for m in review], trouble=[slim(m) for m in trouble])
+        return dict(ok=True, decisions=open_decisions, questions=module("crew_conversa").open_questions(open_all), running=[slim(m) for m in running], review=[slim(m) for m in review], trouble=[slim(m) for m in trouble])
 
     out = ["# Frota: %s" % datetime.datetime.now().strftime("%d/%m %H:%M"), ""]
+    out += module("crew_conversa").questions_lines(open_all)
     out.append("## Decisões esperando por você (%d)" % len(open_decisions))
     for d in sorted(open_decisions, key=lambda d: d["at"]):
         out.append("- **%s** [%s · %s] %s" % (d["id"], d["repo"], d["worker"], d["question"]))
@@ -654,6 +641,8 @@ def cmd_events(a):
 
 
 def cmd_tell(a):
+    if a.name == "chief":
+        return module("crew_conversa").tell(a)
     meta = read_meta(a.name)
     send("prompt", meta["pane"], "[chief] " + a.message)
     emit("told", meta["name"], message=a.message)
@@ -863,12 +852,13 @@ def main():
     s = sub.add_parser("board", help="the whole fleet in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
     s.add_argument("--json", action="store_true", help="machine-readable instead of the text board")
     s.set_defaults(fn=cmd_board)
-    s = sub.add_parser("ask", help="a worker records a decision only the owner can make, and keeps working")
+    s = sub.add_parser("ask", help="a worker asks the chief (default) or records a decision for the owner (--para dono), and keeps working")
     s.add_argument("question")
     s.add_argument("--recommend", required=True, help="what the worker would do, and why")
+    s.add_argument("--para", choices=("chief", "dono"), help="who answers: chief (default) or dono; the chief's own asks are dono")
     s.add_argument("--worker", help="default: this pane's worker")
     s.add_argument("--repo", help="for a decision the chief itself needs, with no worker: the repo (or `geral`) it is about")
-    s.set_defaults(fn=cmd_ask)
+    s.set_defaults(fn=lambda a: module("crew_conversa").ask(a))
     s = sub.add_parser("answer", help="record the owner's answer to a decision and deliver it to the worker")
     s.add_argument("id")
     s.add_argument("answer")
@@ -879,7 +869,7 @@ def main():
     s = sub.add_parser("events", help="what changed since the last call")
     s.add_argument("--all", action="store_true", help="the whole log")
     s.set_defaults(fn=cmd_events)
-    s = sub.add_parser("tell", help="send a message to a worker as a prompt, mid-run included")
+    s = sub.add_parser("tell", help="send a message to a worker as a prompt, mid-run included; `tell chief` goes to the chief's inbox")
     s.add_argument("name")
     s.add_argument("message")
     s.set_defaults(fn=cmd_tell)
