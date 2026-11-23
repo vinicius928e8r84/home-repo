@@ -27,9 +27,14 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its own Herdr tab and its own git worktree, started from the Home Repo with `python scripts/crew.py spawn`. Run `python scripts/crew.py --help` for every command; you must be inside a Herdr pane.
 
-- **Model**: `spawn --type` picks the model from `model_routing.json`. Pass `--model` only when the user named a model for this task.
-- **Watcher**: starts by itself with the first `spawn`, hidden. It sends you a `[crew]` message when a worker ends a turn, writes its report, is merged, stalls or dies.
-- **On a `[crew]` message**: run `python scripts/crew.py events`, read the reports it names, and tell the user what matters.
+- **The board is the fleet's memory.** `python scripts/crew.py board` shows every decision waiting for the user, what is running, what is ready to review, and where each repo stopped. It survives compaction and restarts; your context does not. Run it first in every session, and whenever the user asks where things stand.
+- **Spawn**: state the request, `--done` (the checkable condition that makes the task finished) and `--context` for each file, issue or commit the worker must read, in place of pasted background. `--type` picks the model from `model_routing.json`; pass `--model` only when the user named a model for this task.
+- **Watcher**: starts by itself with the first `spawn`, hidden. It sends you a `[crew]` message when a worker needs a decision, ends a turn, writes its report, is merged, stalls or dies.
+- **On a `[crew]` message**: run `board`, read the reports it names, then update the user in this order, skipping an empty part:
+  1. **Decisões que esperam por você**: each with its id, the question in one line, the worker's recommendation, and yours when it differs.
+  2. **Pronto para revisar**: the worker's result line, and what you need from the user (review, merge, close).
+  3. **Rodando**: one line per worker.
+- **Decisions are records, never chat.** A worker records its own with `ask`. A decision you need from the user yourself goes there too: `ask "..." --recommend "..." --repo <repo>`. When the user answers, run `answer <id> "..."`: it records the answer and delivers it to the worker. A decision leaves the board only by being answered.
 - **Steer**: `tell <name> "message"` reaches a worker mid-turn.
 - **Close**: `close <name>` once the worker's branch is merged.
 - **Failure**: a command that fails prints the step that failed. Tell the user; fix the cause before retrying.

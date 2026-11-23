@@ -4,7 +4,10 @@ Each worker is a Pi agent in its own Herdr tab, working in its own git
 worktree, started with written instructions (the brief). Run this from the
 chief's pane inside Herdr.
 
-  python scripts/crew.py spawn <repo> <task> --type implement --request "..."
+  python scripts/crew.py board                      the whole fleet: decisions waiting, running, to review
+  python scripts/crew.py spawn <repo> <task> --type implement --request "..." --done "..."
+  python scripts/crew.py ask "question" --recommend "..."     (a worker asks the owner)
+  python scripts/crew.py answer D3 "the owner's answer"
   python scripts/crew.py status
   python scripts/crew.py events
   python scripts/crew.py tell <name> "message"
@@ -31,6 +34,9 @@ STATE = os.environ.get("CREW_STATE_DIR") or os.path.join(ROOT, "state", "crew") 
 EVENTS = os.path.join(STATE, "events.jsonl")
 CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
+DECISIONS = os.path.join(STATE, "decisions.jsonl")
+NOTIFIED = os.path.join(STATE, "notify.cursor")
+NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
 
 
@@ -157,7 +163,8 @@ def file_state(path):
 def worker_state(meta):
     """idle, working or gone: what the worker's own Pi last wrote, unless its pane is closed."""
     state = file_state(meta.get("state_file", "")).get("state", "starting")
-    if state != "gone" and meta.get("pane") and not pane_alive(meta["pane"]):
+    inside = os.environ.get("HERDR_ENV") == "1" or os.environ.get("CREW_HERDR_SESSION")
+    if state != "gone" and meta.get("pane") and inside and not pane_alive(meta["pane"]):
         return "gone"
     return state
 
@@ -225,35 +232,57 @@ def route_for(task_type, model):
 
 BRIEF = """# Tarefa: {task} ({type})
 
-Você é um agente de trabalho aberto pelo orquestrador do Home Repo.
+Você é um worker aberto pelo orquestrador do Home Repo. O dono não está olhando este painel: ele só vê o que você escrever no relatório e as decisões que você pedir.
 
 ## Pedido
 
 {request}
 
+## Pronto quando
+
+{done_when}
+
+Só isso conta como pronto. Verifique rodando de verdade (teste, comando, leitura do resultado) antes de escrever o relatório.
+{context_block}
 ## Onde você trabalha
 
 - Pasta: `{worktree}` (um worktree só seu do repo {repo}). Trabalhe só dentro dela.
 - Branch: `{branch}`, criada a partir de `{base}`.
 - Leia o `AGENTS.md` desta pasta antes de qualquer outra coisa e siga-o.
 - Skills: os do repo ficam em `.claude/skills/` e `.agents/skills/` desta pasta; os gerais em `{home}/.agents/skills/`. Leia o `SKILL.md` do que a tarefa pedir, como arquivo.
-
-## Regras
-
 - Faça commits pequenos nesta branch. Push, merge e PR só se o pedido mandar.
-- Uma mensagem que começa com `[chief]` vem do orquestrador: ela tem prioridade sobre o que você está fazendo.
-- Decisão que cabe ao dono (escopo, gasto, algo irreversível): pare e avise, em vez de escolher por ele.
 
-## Como avisar
+## Decisão que cabe ao dono
 
-Ao terminar, ou ao travar, escreva `{report}` com:
+Escopo, gasto, algo irreversível, ou duas saídas boas entre as quais só ele escolhe: registre a pergunta, com a sua recomendação, e siga com tudo o que não depende dela.
 
-- **Resultado**: feito, parcial ou bloqueado, em uma linha.
-- **O que mudou**: os commits, com o hash.
-- **Como verificou**: o comando rodado e o que ele mostrou.
-- **Pendências**: perguntas e o que ficou de fora.
+```
+python "{home}/scripts/crew.py" ask "a pergunta, com o contexto que ele precisa para responder sem abrir o código" --recommend "o que você faria e por quê"
+```
 
-Depois de escrever o arquivo, pare e espere. O orquestrador é avisado sozinho.
+A resposta chega como uma mensagem começando com `[chief]`. Toda mensagem `[chief]` vem do orquestrador e tem prioridade sobre o que você está fazendo.
+
+## Relatório
+
+Ao terminar, ou ao ficar sem nada que possa fazer, escreva `{report}` assim:
+
+```
+**Resultado**: feito | parcial | bloqueado — uma linha dizendo o que o dono tem agora.
+
+## O que mudou
+Os commits, com o hash, e o que cada um faz.
+
+## Como verifiquei
+O comando rodado e o que ele mostrou.
+
+## Falta
+O que ficou de fora e por quê; as decisões que você registrou e ainda esperam resposta.
+
+## Próximo passo sugerido
+Uma linha: revisar e juntar, abrir outra tarefa, ou decidir X.
+```
+
+Escreva para quem não acompanhou o trabalho: frases completas, sem siglas que você criou no caminho. Depois de escrever o arquivo, pare e espere; o orquestrador é avisado sozinho.
 """
 
 
@@ -275,6 +304,11 @@ def cmd_spawn(a):
             request = f.read().strip()
     if not request:
         raise Fail("request", "give --request or --request-file")
+    if not a.done:
+        raise Fail("done", "give --done: the checkable condition that tells the worker the task is finished")
+    context_block = ""
+    if a.context:
+        context_block = "\n## Contexto\n\nLeia antes de começar:\n\n" + "\n".join("- " + item for item in a.context) + "\n"
 
     path = os.path.expanduser(repo["path"])
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -288,7 +322,8 @@ def cmd_spawn(a):
     meta = dict(name=name, repo=a.repo, repo_path=posix(path), task=task, type=a.type or load("model_routing.json").get("default"),
                 model=model, thinking=level, worktree=posix(worktree), branch=branch, base=base,
                 brief=posix(os.path.join(folder, "brief.md")), report=posix(os.path.join(folder, "report.md")),
-                state_file=posix(os.path.join(folder, "state.json")), started=now())
+                state_file=posix(os.path.join(folder, "state.json")), started=now(),
+                request=request, done_when=a.done)
     if a.dry_run:
         return dict(ok=True, dry_run=True, **meta)
 
@@ -298,7 +333,7 @@ def cmd_spawn(a):
     meta["base_sha"] = run("worktree", ["git", "-C", worktree, "rev-parse", "HEAD"]).strip()
     os.makedirs(folder, exist_ok=True)
     with open(meta["brief"], "w", encoding="utf-8") as f:
-        f.write(BRIEF.format(request=request, home=posix(ROOT), **meta))
+        f.write(BRIEF.format(home=posix(ROOT), context_block=context_block, **meta))
     write_meta(meta)
     try:
         pane = find(herdr("pane", "tab", "create", "--workspace", crew_workspace(), "--cwd", worktree, "--label", name, "--no-focus",
@@ -344,6 +379,156 @@ def snapshot(meta, fetch, stall_minutes=0):
 
 
 BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False)
+
+
+def decisions():
+    """Every decision asked so far, folded from the append-only log: id -> record."""
+    out = {}
+    if os.path.exists(DECISIONS):
+        with open(DECISIONS, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    entry = json.loads(line)
+                    out.setdefault(entry["id"], {}).update(entry)
+    return out
+
+
+def log_decision(entry):
+    os.makedirs(STATE, exist_ok=True)
+    with open(DECISIONS, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def cmd_ask(a):
+    name = a.worker or os.environ.get("CREW_AGENT_NAME")
+    if name:
+        repo = read_meta(name)["repo"]
+    elif a.repo:
+        name, repo = "chief", a.repo
+    else:
+        raise Fail("ask", "run this from a worker's pane, or pass --worker, or --repo for a decision of the chief's own")
+    number = len(decisions()) + 1
+    entry = dict(id="D%d" % number, at=now(), worker=name, repo=repo, question=a.question, recommend=a.recommend, status="open")
+    log_decision(entry)
+    emit("decision_needed", name, id=entry["id"], question=a.question)
+    return dict(ok=True, id=entry["id"], next="keep working on everything that does not depend on this; the answer arrives as a [chief] message")
+
+
+def cmd_answer(a):
+    entry = decisions().get(a.id.upper())
+    if not entry:
+        raise Fail("answer", "no decision %r (see `board`)" % a.id)
+    if entry.get("status") != "open":
+        raise Fail("answer", "%s was already answered: %s" % (entry["id"], entry.get("answer")))
+    log_decision(dict(id=entry["id"], status="answered", answered_at=now(), answer=a.answer))
+    emit("decision_answered", entry["worker"], id=entry["id"], answer=a.answer)
+    if entry["worker"] == "chief":
+        return dict(ok=True, id=entry["id"], worker="chief", delivered=False, note="a decision of the chief's own: act on it")
+    meta = read_meta(entry["worker"])
+    delivered, note = False, None
+    if meta.get("closed") or worker_state(meta) == "gone":
+        note = "the worker is closed; the answer is recorded but nobody is acting on it"
+    else:
+        send("prompt", meta["pane"], "[chief] Decisão %s (%s): %s" % (entry["id"], entry["question"], a.answer))
+        delivered = True
+    return dict(ok=True, id=entry["id"], worker=entry["worker"], delivered=delivered, note=note)
+
+
+def ago(stamp):
+    try:
+        then = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return "?"
+    minutes = int((datetime.datetime.now(then.tzinfo) - then).total_seconds() // 60)
+    if minutes < 60:
+        return "há %d min" % minutes
+    if minutes < 48 * 60:
+        return "há %dh%02d" % (minutes // 60, minutes % 60)
+    return "há %d dias" % (minutes // 1440)
+
+
+def first_line(text):
+    return " ".join((text or "").split())[:160]
+
+
+def result_of(meta):
+    """The worker's own one-line result, from its report."""
+    try:
+        with open(meta["report"], encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    found = re.search(r"\*\*Resultado\*\*\s*:?\s*(.+)", text) or re.search(r"Resultado\s*:\s*(.+)", text)
+    return first_line(found.group(1) if found else text)
+
+
+def cmd_board(a):
+    ensure_watcher()
+    everyone = workers(True)
+    open_decisions = [d for d in decisions().values() if d.get("status") == "open"]
+    running, review, trouble = [], [], []
+    for meta in everyone:
+        if meta.get("closed"):
+            continue
+        snap = snapshot(meta, False, 20)
+        meta["_snap"], meta["_result"] = snap, result_of(meta)
+        waiting = [d["id"] for d in open_decisions if d["worker"] == meta["name"]]
+        if meta.get("error") or snap["state"] in ("gone", "starting") or snap["stalled"]:
+            trouble.append(meta)
+        elif snap["state"] == "working":
+            running.append(meta)
+        elif snap["report"]:
+            review.append(meta)
+        elif waiting:
+            running.append(meta)
+        else:
+            trouble.append(meta)
+    if a.json:
+        slim = lambda m: dict(name=m["name"], repo=m["repo"], type=m["type"], task=m["task"], state=m["_snap"]["state"], result=m["_result"], report=m["report"], branch=m["branch"], merged=m["_snap"]["merged"])
+        return dict(ok=True, decisions=open_decisions, running=[slim(m) for m in running], review=[slim(m) for m in review], trouble=[slim(m) for m in trouble])
+
+    out = ["# Frota: %s" % datetime.datetime.now().strftime("%d/%m %H:%M"), ""]
+    out.append("## Decisões esperando por você (%d)" % len(open_decisions))
+    for d in sorted(open_decisions, key=lambda d: d["at"]):
+        out.append("- **%s** [%s · %s] %s" % (d["id"], d["repo"], d["worker"], d["question"]))
+        if d.get("recommend"):
+            out.append("  - recomendação do worker: %s" % d["recommend"])
+        out.append("  - pedida %s. Responder: `python scripts/crew.py answer %s \"...\"`" % (ago(d["at"]), d["id"]))
+    out.append("")
+    out.append("## Rodando agora (%d)" % len(running))
+    for m in running:
+        state = "trabalhando" if m["_snap"]["state"] == "working" else "parado, esperando a sua decisão"
+        out.append("- **%s** [%s · %s · %s] %s, aberto %s: %s" % (m["name"], m["repo"], m["type"], m["model"].split("/")[-1], state, ago(m["started"]), first_line(m.get("request", m["task"]))))
+    out.append("")
+    out.append("## Prontos para você revisar (%d)" % len(review))
+    for m in review:
+        out.append("- **%s** [%s] %s" % (m["name"], m["repo"], m["_result"]))
+        merged = "já entrou na base; pode fechar" if m["_snap"]["merged"] else "ainda não entrou na base"
+        out.append("  - relatório: `%s` · branch `%s` (%s)" % (m["report"], m["branch"], merged))
+    out.append("")
+    if trouble:
+        out.append("## Com problema (%d)" % len(trouble))
+        for m in trouble:
+            snap = m["_snap"]
+            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
+            out.append("- **%s** [%s] %s" % (m["name"], m["repo"], why))
+        out.append("")
+    out.append("## Onde você parou em cada projeto")
+    for repo in sorted(load("repos.json")):
+        mine = [m for m in everyone if m["repo"] == repo]
+        if not mine:
+            out.append("- **%s**: nenhum trabalho da frota ainda." % repo)
+            continue
+        live = [m for m in mine if not m.get("closed")]
+        done = sorted((m for m in mine if m.get("closed")), key=lambda m: m["closed"])
+        pending = len([d for d in open_decisions if d["repo"] == repo])
+        line = "- **%s**: %d aberto(s), %d decisão(ões) pendente(s)." % (repo, len(live), pending)
+        if done:
+            last = done[-1]
+            line += " Último fechado: %s (%s): %s" % (last["name"], ago(last["closed"]), result_of(last) or "sem relatório")
+        out.append(line)
+    print("\n".join(out))
+    return None
 
 
 def ensure_watcher():
@@ -415,9 +600,24 @@ def cmd_close(a):
     return dict(ok=True, worker=meta["name"], merged=snap["merged"], branch_kept=meta["branch"], notes=notes)
 
 
+def file_text(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def write_text(path, text):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def describe(event):
     text = {"turn_ended": "terminou um turno", "gone": "o painel fechou",
-            "report_written": "escreveu o relatório", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais"}
+            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais"}
+    if event["kind"] == "decision_needed":
+        return "%s precisa de uma decisão do dono (%s)" % (event["worker"], event.get("id"))
     return "%s: %s" % (event["worker"], text.get(event["kind"], event["kind"]))
 
 
@@ -446,7 +646,7 @@ def cmd_watch(a):
         return dict(ok=True, watcher_pid=start_watcher(chief, a.every, a.stall), chief=chief, log=posix(os.path.join(STATE, "watch.log")))
     chief = a.chief
     herdr("herdr", "pane", "get", chief)
-    pending, loops, quiet_since = [], 0, time.time()
+    loops, quiet_since = 0, time.time()
     print(json.dumps(dict(ok=True, watching=True, chief=chief, every=a.every, stall_minutes=a.stall)), flush=True)
     while True:
         os.makedirs(STATE, exist_ok=True)
@@ -480,22 +680,31 @@ def cmd_watch(a):
                 new.append(emit("stalled", name, minutes=a.stall))
             with open(seen_file, "w", encoding="utf-8") as f:
                 json.dump(snap, f)
-            pending.extend(new)
             for event in new:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
-        if pending and chief_state(chief) == "idle":
+        lines = []
+        if os.path.exists(EVENTS):
+            with open(EVENTS, encoding="utf-8") as f:
+                lines = f.readlines()
+        told = int(file_text(NOTIFIED) or 0)
+        news = [e for e in map(json.loads, lines[told:]) if e["kind"] in NOTIFY]
+        if not news:
+            write_text(NOTIFIED, str(len(lines)))
+        elif chief_state(chief) == "idle":
             try:
-                send("notify", chief, "[crew] %s. Rode `python scripts/crew.py events` e avise o dono do que importa." % "; ".join(describe(e) for e in pending))
-                pending = []
+                send("notify", chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
+                write_text(NOTIFIED, str(len(lines)))
             except Fail as e:
                 print(json.dumps(dict(ok=False, step=e.step, error=e.error)), flush=True)
         loops += 1
         if a.rounds and loops >= a.rounds:
-            return dict(ok=True, rounds=loops, pending=len(pending))
+            return dict(ok=True, rounds=loops)
         time.sleep(a.every)
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -506,9 +715,24 @@ def main():
     s.add_argument("--model", help="override: an on_request name (e.g. fable) or provider/id:thinking")
     s.add_argument("--request", help="what the worker must do")
     s.add_argument("--request-file", help="file holding the request")
+    s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
+    s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
     s.add_argument("--start-timeout", type=int, default=90, help="seconds to wait for Pi to be ready")
     s.add_argument("--dry-run", action="store_true", help="print the plan; create nothing")
     s.set_defaults(fn=cmd_spawn)
+    s = sub.add_parser("board", help="the whole fleet in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
+    s.add_argument("--json", action="store_true", help="machine-readable instead of the text board")
+    s.set_defaults(fn=cmd_board)
+    s = sub.add_parser("ask", help="a worker records a decision only the owner can make, and keeps working")
+    s.add_argument("question")
+    s.add_argument("--recommend", required=True, help="what the worker would do, and why")
+    s.add_argument("--worker", help="default: this pane's worker")
+    s.add_argument("--repo", help="for a decision the chief itself needs, with no worker: the repo (or `geral`) it is about")
+    s.set_defaults(fn=cmd_ask)
+    s = sub.add_parser("answer", help="record the owner's answer to a decision and deliver it to the worker")
+    s.add_argument("id")
+    s.add_argument("answer")
+    s.set_defaults(fn=cmd_answer)
     s = sub.add_parser("status", help="every open worker, with live state, report and merge")
     s.add_argument("--all", action="store_true", help="include closed workers")
     s.set_defaults(fn=cmd_status)
@@ -535,7 +759,9 @@ def main():
     s.set_defaults(fn=cmd_watch)
     a = p.parse_args()
     try:
-        print(json.dumps(a.fn(a), indent=2, ensure_ascii=False))
+        result = a.fn(a)
+        if result is not None:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
     except Fail as e:
         print(json.dumps(dict(ok=False, step=e.step, error=e.error), indent=2, ensure_ascii=False))
         sys.exit(1)
