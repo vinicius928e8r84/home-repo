@@ -2,6 +2,8 @@
 
 Ponto de partida do agente: os skills que valem em qualquer repo e os ponteiros para os outros repos.
 
+Na primeira mensagem de cada sessão, rode `python scripts/crew.py board` e resuma ao usuário onde paramos: decisões pendentes, o que roda e o que travou.
+
 ## Skills
 
 Os skills daqui valem para qualquer repo; o que serve a um repo só vive nele. Skill novo entra aqui quando o usuário pedir.
