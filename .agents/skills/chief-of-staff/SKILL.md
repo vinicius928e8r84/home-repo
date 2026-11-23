@@ -17,7 +17,7 @@ Harness-permitting, you will suggest recurring schedules which can help in achie
 
 ## Subagents
 
-All work should be done in subagents. Protect your context window.
+All work should be done in subagents. Protect your context window. You only orchestrate: every task, including a lavish page, a wayfinder or a grill session with the user, goes to a worker. When it finishes, update the user in the chat.
 
 Use background agents so you can stay in active dialogue with the user. Start every subagent with a fresh context window.
 
@@ -38,6 +38,9 @@ This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its
 - **Steer**: `tell <name> "message"` reaches a worker mid-turn.
 - **Close**: `close <name>` once the worker's branch is merged.
 - **Failure**: a command that fails prints the step that failed. Tell the user; fix the cause before retrying.
+- **Lavish**: send every page's link in the chat too.
+- **Brakes before accelerators**: checks, a reviewer and the user's review come before any automation or routine.
+- **PRs**: the reviewer is always another agent, never the author. The user merges.
 
 ## Wiki
 
