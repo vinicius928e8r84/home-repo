@@ -639,7 +639,7 @@ def cmd_read(a):
 
 def drop_folder(meta, notes):
     """`close --force` after git gave up on the worktree (already unregistered, or a folder something holds open):
-    forget git's record and delete the folder, but only a folder inside ~/worktrees. A leftover only adds a note."""
+    delete the folder and then forget git's record, but only a folder inside ~/worktrees. A leftover only adds a note."""
     path, root = os.path.abspath(meta["worktree"]), os.path.abspath(os.path.join(os.path.expanduser("~"), "worktrees"))
     try:
         inside = path != root and os.path.commonpath([path, root]) == root
@@ -648,7 +648,6 @@ def drop_folder(meta, notes):
     if not inside:
         notes.append("pasta %s fica onde está: fora de %s" % (posix(path), posix(root)))
         return
-    subprocess.run(["git", "-C", meta["repo_path"], "worktree", "prune"], capture_output=True)
 
     def writable(func, target, _exc):
         os.chmod(target, 0o700)
@@ -658,6 +657,8 @@ def drop_folder(meta, notes):
         shutil.rmtree(path, onerror=writable)
     except OSError:
         pass
+    # prune only now: while the folder exists git still counts the worktree as live and keeps its record
+    subprocess.run(["git", "-C", meta["repo_path"], "worktree", "prune"], capture_output=True)
     if os.path.exists(path):
         notes.append("pasta %s presa (algo a mantém aberta): apague à mão" % posix(path))
 

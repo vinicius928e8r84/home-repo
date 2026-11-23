@@ -379,6 +379,20 @@ class CloseForce(CrewCase):
         self.assertTrue(self.crew.read_meta("t-job").get("closed"))
         self.assertTrue(any(meta["worktree"] in n or "pasta" in n for n in result["notes"]), result["notes"])
 
+    def test_force_leaves_no_ghost_registration_for_a_worktree_git_knows(self):
+        """git still lists the worktree when the folder goes: pruning before the delete leaves a `prunable` ghost,
+        and the next `git worktree add` on the same branch fails with "already used by worktree"."""
+        meta = self.add_worker()
+        git(self.repo, "worktree", "add", "-q", "-b", meta["branch"], meta["worktree"], "origin/main")
+        self.assertIn("worktrees/Test-job", git(self.repo, "worktree", "list", "--porcelain").replace("\\", "/"))
+        notes = []
+        self.crew.drop_folder(meta, notes)
+        self.assertFalse(os.path.exists(meta["worktree"]), notes)
+        listing = git(self.repo, "worktree", "list", "--porcelain")
+        self.assertNotIn("prunable", listing)
+        self.assertNotIn("Test-job", listing.replace("\\", "/"))
+        git(self.repo, "worktree", "add", "-q", meta["worktree"], meta["branch"])  # the branch is free again
+
     def test_force_never_deletes_a_folder_outside_the_worktrees_directory(self):
         outside = os.path.join(self.tmp, "precious")
         os.makedirs(outside)
