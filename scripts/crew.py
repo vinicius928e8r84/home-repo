@@ -254,6 +254,8 @@ Você é um worker aberto pelo orquestrador do Home Repo. O dono não está olha
 
 {request}
 
+Faça o que o pedido diz, e só isso. O que ele não pediu (generalizar, varrer o resto do repo, endurecer além do necessário) não entra no trabalho: anote em "Sugestões" no relatório, e o dono decide.
+
 ## Pronto quando
 
 {done_when}
@@ -293,6 +295,9 @@ O comando rodado e o que ele mostrou.
 
 ## Falta
 O que ficou de fora e por quê; as decisões que você registrou e ainda esperam resposta.
+
+## Sugestões
+O que você viu e não fez porque o pedido não mandava. Uma linha cada; sem nada, escreva "nenhuma".
 
 ## Próximo passo sugerido
 Uma linha: revisar e juntar, abrir outra tarefa, ou decidir X.
@@ -840,7 +845,7 @@ def main():
     s.add_argument("task", help="short task name, used in the worker, worktree and branch names")
     s.add_argument("--type", help="a route of model_routing.json (default: its `default`)")
     s.add_argument("--model", help="override: an on_request name (e.g. fable) or provider/id:thinking")
-    s.add_argument("--request", help="what the worker must do")
+    s.add_argument("--request", help="what the worker must do, in the owner's own words")
     s.add_argument("--request-file", help="file holding the request")
     s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
     s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
