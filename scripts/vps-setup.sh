@@ -10,7 +10,7 @@ PI_AGENT_DIR="$CREW_HOME/pi-agent"
 STATE_DIR="${CREW_REMOTE_DIR:-$HOME/crew-state}"
 GH_OWNER="${GH_OWNER:-vinicius928e8r84}"
 MODEL="${MODEL:-claude-bridge/claude-sonnet-5-5}"
-export PATH="$HOME/.local/bin:/opt/factory/toolchain/bin:$PATH"
+export PATH="$CREW_HOME/bin:$HOME/.local/bin:/opt/factory/toolchain/bin:$PATH"
 
 step() { printf '\n== %s\n' "$*"; }
 
@@ -46,7 +46,7 @@ Description=Herdr headless server for crew workers (session $SESSION)
 
 [Service]
 Type=simple
-Environment=PATH=$HOME/.local/bin:/opt/factory/toolchain/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=$CREW_HOME/bin:$HOME/.local/bin:/opt/factory/toolchain/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HERDR_SESSION=$SESSION
 WorkingDirectory=$HOME
 ExecStart=$HERDR --session $SESSION server
@@ -78,7 +78,7 @@ else
 fi
 printf '%s\n' '#!/usr/bin/env bash' \
   "export PI_CODING_AGENT_DIR=\"$PI_AGENT_DIR\"" \
-  "export PATH=\"$HOME/.local/bin:/opt/factory/toolchain/bin:\$PATH\"" \
+  "export PATH=\"$CREW_HOME/bin:$HOME/.local/bin:/opt/factory/toolchain/bin:\$PATH\"" \
   "exec \"$CREW_HOME/pi/node_modules/.bin/pi\" \"\$@\"" > "$PI"
 chmod +x "$PI"
 "$PI" --version | tail -1

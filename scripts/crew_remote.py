@@ -13,6 +13,7 @@ SESSION = os.environ.get("CREW_REMOTE_SESSION", "crew")
 CREW_HOME = os.environ.get("CREW_REMOTE_HOME", "$HOME/.local/share/crew")
 STATE_DIR = os.environ.get("CREW_REMOTE_DIR", "$HOME/crew-state")
 PANE_ON_HOST = re.compile(r"@([A-Za-z0-9_.@-]+):(\S+)")
+PANE_VERBS = {"get", "run", "read", "send-text", "send-keys", "close"}
 ASK_COMMAND = re.compile(r'python3? "[^"]*crew\.py" ask')
 
 ASK_SCRIPT = '''import argparse
@@ -75,13 +76,13 @@ def ssh(host, command, step="remote", stdin=None):
 
 
 def pane_on_host(args):
-    host, plain = None, []
-    for arg in args:
-        found = PANE_ON_HOST.fullmatch(arg) if isinstance(arg, str) and len(arg) < 64 else None
+    args = list(args)
+    if len(args) > 2 and args[0] == "pane" and args[1] in PANE_VERBS:
+        found = PANE_ON_HOST.fullmatch(str(args[2]))
         if found:
-            host, arg = found.group(1), found.group(2)
-        plain.append(arg)
-    return host, plain
+            args[2] = found.group(2)
+            return found.group(1), args
+    return None, args
 
 
 def herdr(host, step, *args):
@@ -127,13 +128,17 @@ def mirror(path, text):
 
 
 def register_asks(meta, text):
-    lines = [line for line in (text or "").splitlines() if line.strip()]
+    lines = [line for line in (text or "").rpartition("\n")[0].splitlines() if line.strip()]
     seen_path = os.path.join(crew.STATE, meta["name"], "asks.seen")
     seen = int(crew.file_text(seen_path) or 0)
     for line in lines[seen:]:
-        ask = json.loads(line)
+        try:
+            ask = json.loads(line)
+            question = ask["question"]
+        except (ValueError, KeyError, TypeError):
+            raise Fail("sync", "%s: asks.jsonl on %s has a line that is not a decision: %r" % (meta["name"], meta["host"], line[:80]))
         entry = dict(id="D%d" % (len(crew.decisions()) + 1), at=crew.now(), worker=meta["name"], repo=meta["repo"],
-                     question=ask["question"], recommend=ask.get("recommend"), status="open")
+                     question=question, recommend=ask.get("recommend"), status="open")
         crew.log_decision(entry)
         crew.emit("decision_needed", meta["name"], id=entry["id"], question=entry["question"])
     if len(lines) > seen:
@@ -142,18 +147,33 @@ def register_asks(meta, text):
 
 def sync(metas):
     by_host = {}
+    problems = []
     for meta in metas:
         by_host.setdefault(meta["host"], []).append(meta)
     for host, group in by_host.items():
         folders = [m["remote_dir"] for m in group]
-        pulled = json.loads(ssh(host, "python3 - " + " ".join(shlex.quote(f) for f in folders), "sync", stdin=PULL_SCRIPT))
+        try:
+            pulled = json.loads(ssh(host, "python3 - " + " ".join(shlex.quote(f) for f in folders), "sync", stdin=PULL_SCRIPT))
+            if not isinstance(pulled, dict):
+                raise ValueError("not an object")
+        except ValueError as e:
+            problems.append("%s answered something that is not the state of its workers (%s)" % (host, e))
+            continue
+        except Fail as e:
+            problems.append("%s: %s" % (host, e.error))
+            continue
         for meta in group:
             item = pulled.get(meta["remote_dir"], {})
-            if item.get("state") is not None:
-                mirror(meta["state_file"], item["state"])
-            if item.get("report") is not None:
-                mirror(meta["report"], item["report"])
-            register_asks(meta, item.get("asks"))
+            try:
+                if item.get("state") is not None:
+                    mirror(meta["state_file"], item["state"])
+                if item.get("report") is not None:
+                    mirror(meta["report"], item["report"])
+                register_asks(meta, item.get("asks"))
+            except Fail as e:
+                problems.append(e.error)
+    if problems:
+        raise Fail("sync", "; ".join(problems))
 
 
 def spawn(a, repo, name, task, model, level, request, context_block, host):
@@ -198,7 +218,7 @@ def spawn(a, repo, name, task, model, level, request, context_block, host):
         pane = "@%s:%s" % (host, pane)
         meta["pane"] = pane
         crew.write_meta(meta)
-        crew.herdr("agent", "pane", "run", pane, '"%s/bin/pi" --approve -e "%s" --model %s:%s' % (crew_home, extension, model, level))
+        crew.herdr("agent", "pane", "run", pane, 'export PATH="%s/bin:$PATH" && "%s/bin/pi" --approve -e "%s" --model %s:%s' % (crew_home, crew_home, extension, model, level))
         deadline = time.time() + a.start_timeout
         while True:
             text = ssh(host, "cat %s 2>/dev/null || true" % shlex.quote(meta["remote_state_file"]))

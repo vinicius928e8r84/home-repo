@@ -27,6 +27,8 @@ home = os.environ["FAKE_VPS_HOME"]
 if host == "nowhere" or os.path.exists(os.path.join(home, "..", "down")):
     sys.stderr.write("ssh: Could not resolve hostname %s\\n" % host)
     sys.exit(255)
+if os.path.exists(os.path.join(home, "..", "banner")):
+    sys.stdout.write("Welcome to the host. Last login: yesterday\\n")
 command = " ".join(words)
 if command.startswith("python3 "):
     command = '"%s" %s' % (sys.executable.replace("\\\\", "/"), command[len("python3 "):])
@@ -177,6 +179,7 @@ class RemoteCrewTest(unittest.TestCase):
         self.assertIn(self.vps + "/.local/share/crew/bin/pi", run[3])
         self.assertIn(self.vps + "/crew-state/crew-state.ts", run[3])
         self.assertIn("claude-bridge/claude-sonnet-5-5:high", run[3])
+        self.assertTrue(run[3].startswith('export PATH="%s/.local/share/crew/bin:$PATH" && ' % self.vps), run[3])
         prompt = next(entry for entry in log if entry[:2] == ["pane", "send-text"])
         self.assertIn(self.vps + "/crew-state/home-toy/brief.md", prompt[3])
         self.assertTrue(os.path.isfile(self.state + "/home-toy/state.json"))
@@ -249,10 +252,58 @@ class RemoteCrewTest(unittest.TestCase):
         self.assertEqual(status["workers"][0]["state"], "idle")
         self.assertIn("remote sync failed", out.stderr)
 
+    def test_output_that_is_not_json_does_not_break_the_board_or_status(self):
+        self.spawn()
+        open(self.tmp + "/vps/banner", "w").close()
+        for command in (["status"], ["board", "--json"]):
+            result, out = self.crew(*command)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn("remote sync failed (sync)", out.stderr)
+        text = subprocess.run([sys.executable, "-I", CREW, "board"], env=self.env, capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(text.returncode, 0, text.stderr)
+        self.assertIn("remote sync failed (sync)", text.stderr)
+        status, _ = self.crew("status")
+        self.assertEqual(status["workers"][0]["state"], "idle")
+
+    def test_a_cut_or_broken_asks_line_does_not_break_the_board(self):
+        self.spawn()
+        asks = self.vps + "/crew-state/home-toy/asks.jsonl"
+        with open(asks, "w", encoding="utf-8") as f:
+            f.write('{"question": "pergunta cort')
+        board, out = self.crew("board", "--json")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertFalse(os.path.exists(self.state + "/decisions.jsonl"))
+        with open(asks, "w", encoding="utf-8") as f:
+            f.write('not json at all\n')
+        board, out = self.crew("board", "--json")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("not a decision", out.stderr)
+        with open(asks, "w", encoding="utf-8") as f:
+            f.write('{"question": "pergunta inteira", "recommend": "sim"}\n')
+        self.crew("board", "--json")
+        with open(self.state + "/decisions.jsonl", encoding="utf-8") as f:
+            self.assertIn("pergunta inteira", f.read())
+
+    def test_only_the_pane_argument_is_routed_to_a_host(self):
+        self.assertEqual(crew_remote.pane_on_host(["pane", "send-text", "w1:p2", "@joao:veja"]), (None, ["pane", "send-text", "w1:p2", "@joao:veja"]))
+        self.assertEqual(crew_remote.pane_on_host(["pane", "send-text", "@vps:w1:p2", "@joao:veja"]), ("vps", ["pane", "send-text", "w1:p2", "@joao:veja"]))
+        self.assertEqual(crew_remote.pane_on_host(["tab", "create", "--label", "@joao:veja"]), (None, ["tab", "create", "--label", "@joao:veja"]))
+        self.spawn()
+        told, _ = self.crew("tell", "home-toy", "@joao:veja")
+        self.assertTrue(told["ok"], told)
+        sent = [entry for entry in self.herdr_log() if entry[:2] == ["pane", "send-text"]][-1]
+        self.assertEqual(sent[2:], ["w1:p2", "[chief] @joao:veja"])
+
+    def test_crew_bin_comes_first_in_the_path_of_the_host_setup(self):
+        with open(os.path.join(SCRIPTS, "vps-setup.sh"), encoding="utf-8") as f:
+            lines = [line for line in f if "PATH" in line and ".local/bin" in line]
+        self.assertEqual(len(lines), 3)
+        for line in lines:
+            self.assertIn("$CREW_HOME/bin:$HOME/.local/bin", line)
+
     def test_pane_ids_carry_their_host(self):
         self.assertEqual(crew_remote.pane_on_host(["pane", "get", "@vps:w1:p2"]), ("vps", ["pane", "get", "w1:p2"]))
         self.assertEqual(crew_remote.pane_on_host(["pane", "get", "w1:p2"]), (None, ["pane", "get", "w1:p2"]))
-        self.assertEqual(crew_remote.pane_on_host(["pane", "send-text", "w1:p2", "mail me @a:b"]), (None, ["pane", "send-text", "w1:p2", "mail me @a:b"]))
 
 
 if __name__ == "__main__":

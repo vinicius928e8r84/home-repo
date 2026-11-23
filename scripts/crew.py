@@ -85,8 +85,8 @@ def sync_remote():
     if behind_ssh:
         try:
             remote().sync(behind_ssh)
-        except Fail as e:
-            print("remote sync failed (%s): %s" % (e.step, e.error), file=sys.stderr)
+        except (Fail, OSError) as e:
+            print("remote sync failed (%s): %s" % (getattr(e, "step", "io"), getattr(e, "error", e)), file=sys.stderr)
 
 
 def now():
@@ -118,7 +118,7 @@ def run(step, cmd, cwd=None):
 
 def herdr(step, *args):
     """Run a Herdr command. CREW_HERDR_SESSION targets a named session from outside it (tests)."""
-    if any(isinstance(a, str) and a.startswith("@") for a in args):
+    if len(args) > 2 and str(args[2]).startswith("@"):
         host, plain = remote().pane_on_host(args)
         if host:
             return remote().herdr(host, step, *plain)
