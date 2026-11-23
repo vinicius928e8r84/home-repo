@@ -35,9 +35,9 @@ def _achados_do_arquivo(caminho, dados, teto, codigo):
     achados = []
     if len(dados) > teto["bytes_maximos"]:
         detalhe = f"{len(dados)} bytes, acima do teto de {teto['bytes_maximos']}"
-        achados.append(Achado(ID, caminho, detalhe))
+        achados.append(Achado(ID, caminho, detalhe, medida=len(dados)))
     linhas = contar_linhas(dados)
     if Path(caminho).suffix.lower() in codigo and linhas > teto["linhas_maximas"]:
         detalhe = f"{linhas} linhas, acima do teto de {teto['linhas_maximas']}"
-        achados.append(Achado(ID, caminho, detalhe))
+        achados.append(Achado(ID, caminho, detalhe, medida=linhas, grupo=caminho + "#linhas"))
     return achados

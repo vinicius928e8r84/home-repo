@@ -16,6 +16,8 @@ class Achado:
     arquivo: str
     detalhe: str
     linha: int = 0
+    medida: int = 1
+    grupo: str = ""
 
 
 @dataclass(frozen=True)
@@ -68,16 +70,30 @@ def parece_binario(dados):
     return b"\0" in dados[:BYTES_PARA_LER_NO_INICIO]
 
 
+@dataclass(frozen=True)
+class Selecao:
+    universo: list
+    alvos: list
+
+
+@dataclass(frozen=True)
+class Configuracao:
+    limites: dict
+    excecoes: dict
+    base: str = None
+    execucao: str = "tudo"
+
+
 class Contexto:
-    def __init__(self, raiz, universo, alvos, leitor, limites, excecoes, base=None, execucao="tudo"):
+    def __init__(self, raiz, selecao, leitor, configuracao):
         self.raiz = raiz
-        self.universo = list(universo)
-        self.alvos = [e for e in alvos if e.modo != MODO_LINK]
+        self.universo = list(selecao.universo)
+        self.alvos = [e for e in selecao.alvos if e.modo != MODO_LINK]
         self.leitor = leitor
-        self.limites = limites
-        self.excecoes = excecoes
-        self.base = base
-        self.execucao = execucao
+        self.limites = configuracao.limites
+        self.excecoes = configuracao.excecoes
+        self.base = configuracao.base
+        self.execucao = configuracao.execucao
         self.avisos = []
         self._cache = {}
         self.links = {e.caminho: self._alvo_do_link(e) for e in self.universo if e.modo == MODO_LINK}

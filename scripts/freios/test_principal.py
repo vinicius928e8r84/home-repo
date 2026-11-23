@@ -36,12 +36,28 @@ class TesteDoPrincipal(unittest.TestCase):
         self.repo.escrever("grande.md", "x" * 20001)
         self.assertEqual(self.rodar("--commit")[0], 0)
 
-    def test_tudo_confere_arquivo_novo_do_disco(self):
-        self.repo.adicionar("a.md", "oi\n")
+    def test_tudo_confere_o_indice_e_ignora_arquivo_nao_rastreado(self):
+        self.repo.adicionar("a.md", "oi" + chr(10))
+        self.repo.commitar("um")
         self.repo.escrever("grande.md", "x" * 20001)
+        self.assertEqual(self.rodar("--tudo")[0], 0)
+        self.repo.adicionar("grande.md", "x" * 20001)
         codigo, saida = self.rodar("--tudo")
         self.assertEqual(codigo, 1)
         self.assertIn("grande.md", saida)
+
+    def test_commit_roda_so_tamanho_e_comentarios(self):
+        _, saida = self.rodar("--commit")
+        self.assertEqual(
+            [linha[2:] for linha in saida.splitlines() if linha.startswith(("✓", "✗"))], ["tamanho", "comentarios"]
+        )
+
+    def test_tudo_roda_todas_as_verificacoes(self):
+        self.repo.adicionar("a.md", "oi" + chr(10))
+        _, saida = self.rodar("--tudo")
+        rodadas = [linha[2:].split(":")[0].split(" ")[0] for linha in saida.splitlines() if linha.startswith(("✓", "✗"))]
+        esperadas = [v.ID for v in principal.POR_ARQUIVO + principal.DO_REPOSITORIO if v is not principal.testes]
+        self.assertEqual(rodadas, esperadas)
 
     def test_so_roda_a_verificacao_pedida(self):
         self.repo.adicionar("a.md", "x" * 20001)

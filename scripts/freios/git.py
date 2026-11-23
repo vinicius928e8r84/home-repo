@@ -2,7 +2,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.freios.contexto import Contexto, Entrada, carregar_json
+from scripts.freios.contexto import Configuracao, Contexto, Entrada, Selecao, carregar_json
 
 
 @dataclass(frozen=True)
@@ -40,12 +40,6 @@ def entradas_do_indice(raiz):
     return entradas
 
 
-def entradas_do_diretorio(raiz):
-    saida = git(raiz, "ls-files", "--others", "--exclude-standard", "-z").decode("utf-8", errors="replace")
-    novas = [Entrada(c) for c in filter(None, saida.split("\0")) if (Path(raiz) / c).is_file()]
-    return entradas_do_indice(raiz) + novas
-
-
 def caminhos_do_commit(raiz):
     saida = git(raiz, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
     return set(filter(None, saida.decode("utf-8", errors="replace").split("\0")))
@@ -59,6 +53,15 @@ def ref_existe(raiz, ref):
     return resposta.returncode == 0
 
 
+def conteudo_na_ref(raiz, ref, caminho):
+    if not ref_existe(raiz, ref):
+        return None
+    resposta = subprocess.run(
+        ["git", "cat-file", "blob", f"{ref}:{caminho}"], cwd=raiz, capture_output=True, check=False
+    )
+    return resposta.stdout.decode("utf-8") if resposta.returncode == 0 else None
+
+
 def commits_entre(raiz, base, cabeca):
     formato = "%H%x09%ae%x09%ce%x09%s%x1f%B"
     saida = git(raiz, "log", "-z", "--no-show-signature", f"--format={formato}", f"{base}..{cabeca}")
@@ -70,15 +73,6 @@ def commits_entre(raiz, base, cabeca):
     return commits
 
 
-def leitor_do_disco(raiz):
-    def ler(entrada):
-        if entrada.modo == "120000":
-            return git(raiz, "cat-file", "blob", entrada.sha)
-        dados = (Path(raiz) / entrada.caminho).read_bytes()
-        return dados if b"\0" in dados else dados.replace(b"\r\n", b"\n")
-    return ler
-
-
 def leitor_do_indice(raiz):
     def ler(entrada):
         return git(raiz, "cat-file", "blob", entrada.sha)
@@ -87,14 +81,9 @@ def leitor_do_indice(raiz):
 
 def montar_contexto(raiz, modo, base):
     universo = entradas_do_indice(raiz)
+    alvos = universo
     if modo == "commit":
         escolhidos = caminhos_do_commit(raiz)
         alvos = [e for e in universo if e.caminho in escolhidos]
-        leitor = leitor_do_indice(raiz)
-    else:
-        universo = entradas_do_diretorio(raiz)
-        alvos = universo
-        leitor = leitor_do_disco(raiz)
-    limites = carregar_json("limites.json")
-    excecoes = carregar_json("excecoes.json")
-    return Contexto(raiz, universo, alvos, leitor, limites, excecoes, base, modo)
+    configuracao = Configuracao(carregar_json("limites.json"), carregar_json("excecoes.json"), base, modo)
+    return Contexto(raiz, Selecao(universo, alvos), leitor_do_indice(raiz), configuracao)

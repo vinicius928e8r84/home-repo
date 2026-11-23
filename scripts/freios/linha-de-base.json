@@ -1,0 +1,38 @@
+{
+  "tamanho": {
+    ".pi/extensions/fm-calm.ts": 21989,
+    "scripts/crew.py": 34603
+  },
+  "comentarios": {
+    ".agents/skills/aapanel/aa_client.py": 3,
+    ".agents/skills/aapanel/scripts/register-vps.sh": 37,
+    ".agents/skills/buy-domain/scripts/aa_site.py": 1,
+    ".agents/skills/buy-domain/scripts/cf_domain.py": 1,
+    ".agents/skills/buy-domain/scripts/go.py": 2,
+    ".agents/skills/wizard/template.sh": 44,
+    ".agents/skills/writing-for-agents/scripts/validate.py": 1,
+    ".pi/extensions/crew-state.ts": 11,
+    ".pi/extensions/fm-calm.ts": 84,
+    ".pi/extensions/lib/crew-calm-robot-sprite.ts": 18,
+    ".pi/extensions/lib/fm-calm-assistant-layout.ts": 17,
+    ".pi/extensions/lib/fm-calm-operational-user-layout.ts": 7,
+    ".pi/extensions/lib/fm-calm-pending-operational-layout.ts": 56,
+    ".pi/extensions/lib/fm-calm-preservation.ts": 5,
+    ".pi/extensions/lib/fm-calm-visibility.ts": 4,
+    ".pi/extensions/lib/fm-calm-working-ship-sprite.ts": 62,
+    ".pi/extensions/lib/fm-calm-working-ship.ts": 39,
+    ".pi/extensions/lib/fm-operational-input.ts": 17,
+    "scripts/calm-preview.mjs": 28,
+    "scripts/check_routing.py": 1,
+    "scripts/crew.py": 13
+  },
+  "skills": {
+    ".agents/skills/domain-modeling/SKILL.md": 3,
+    ".agents/skills/retro/SKILL.md": 1,
+    ".agents/skills/wayfinder/SKILL.md": 1,
+    ".agents/skills/wizard/SKILL.md": 1
+  },
+  "links": {
+    ".agents/skills/wizard/SKILL.md": 1
+  }
+}

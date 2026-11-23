@@ -185,7 +185,8 @@
       ],
       "comando": [
         "npx",
-        "--no-install",
+        "--prefix",
+        "scripts/freios",
         "eslint",
         "--config",
         "scripts/freios/eslint.config.mjs"
@@ -207,6 +208,14 @@
     "linhas_maximas": 69,
     "extensoes": [
       ".py"
+    ]
+  },
+  "linha_de_base": {
+    "verificacoes": [
+      "tamanho",
+      "comentarios",
+      "skills",
+      "links"
     ]
   }
 }

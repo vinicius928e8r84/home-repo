@@ -56,19 +56,18 @@ class TesteDoGit(unittest.TestCase):
         ctx = montar_contexto(self.repo.raiz, "commit", "origin/main")
         self.assertEqual(ctx.texto(ctx.arquivos["a.md"]), "preparado\n")
 
-    def test_no_modo_tudo_le_o_disco_e_troca_crlf_por_lf(self):
-        self.repo.adicionar("a.sh", "echo oi\n")
-        self.repo.escrever("a.sh", b"echo oi\r\necho tchau\r\n")
+    def test_no_modo_tudo_le_o_indice_e_nao_o_disco(self):
+        self.repo.adicionar("a.md", "no indice" + chr(10))
+        self.repo.escrever("a.md", "so no disco" + chr(10))
         ctx = montar_contexto(self.repo.raiz, "tudo", "origin/main")
-        self.assertEqual(ctx.texto(ctx.arquivos["a.sh"]), "echo oi\necho tchau\n")
+        self.assertEqual(ctx.texto(ctx.arquivos["a.md"]), "no indice" + chr(10))
 
-    def test_no_modo_tudo_arquivo_novo_ainda_nao_adicionado_entra(self):
-        self.repo.adicionar("a.md", "a\n")
-        self.repo.escrever("novo.md", "novo\n")
-        self.repo.escrever(".gitignore", "ignorado.md\n")
-        self.repo.escrever("ignorado.md", "x\n")
+    def test_no_modo_tudo_arquivo_nao_rastreado_fica_de_fora(self):
+        self.repo.adicionar("a.md", "a" + chr(10))
+        self.repo.escrever("rascunho.py", "# nota" + chr(10))
         ctx = montar_contexto(self.repo.raiz, "tudo", "origin/main")
-        self.assertEqual(sorted(ctx.arquivos), [".gitignore", "a.md", "novo.md"])
+        self.assertEqual(sorted(ctx.arquivos), ["a.md"])
+        self.assertEqual([e.caminho for e in ctx.alvos], ["a.md"])
 
     def test_no_modo_commit_os_alvos_sao_so_os_preparados_e_o_universo_e_todo_o_indice(self):
         self.repo.adicionar("a.md", "a\n")

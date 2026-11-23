@@ -12,7 +12,7 @@ Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesqu
 
 ## Freios
 
-`python scripts/freios/freios.py --commit` confere o que está no commit; `--tudo` confere o repo inteiro e os commits da branch. Cada verificação diz o conserto quando falha. Os tetos ficam em `scripts/freios/limites.json` e as exceções, com motivo, em `scripts/freios/excecoes.json`; mudar um deles é decisão do dono. Ligue os ganchos uma vez por clone com `git config core.hooksPath .githooks`.
+`python scripts/freios/freios.py --commit` confere tamanho e comentários do que está no commit; `--tudo` confere o índice inteiro e os commits da branch. Cada verificação diz o conserto quando falha. O que já existia na `main` (comentários, arquivos grandes, skills e links) está em `scripts/freios/linha-de-base.json`: só avisa, e arquivo novo ou que piora reprova. Depois de uma limpeza, rode `--tudo --atualizar-linha-de-base` e versione o arquivo; ele só encolhe. Os tetos ficam em `limites.json` e as exceções, com motivo, em `excecoes.json`; mudar um deles é decisão do dono. Ligue os ganchos uma vez por clone com `git config core.hooksPath .githooks`.
 
 ## Wiki
 

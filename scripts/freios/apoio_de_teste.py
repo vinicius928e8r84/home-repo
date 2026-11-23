@@ -3,10 +3,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from scripts.freios.contexto import Contexto, Entrada, carregar_json
+from scripts.freios.contexto import Configuracao, Contexto, Entrada, Selecao, carregar_json
 
 
-def contexto_de_memoria(arquivos, links=None, limites=None, excecoes=None, raiz=None):
+def contexto_de_memoria(arquivos, links=None, raiz=None, **configuracao):
     conteudos = {}
     entradas = []
     for caminho, dados in arquivos.items():
@@ -19,14 +19,9 @@ def contexto_de_memoria(arquivos, links=None, limites=None, excecoes=None, raiz=
     def ler(entrada):
         return conteudos[entrada.caminho]
 
-    return Contexto(
-        raiz,
-        entradas,
-        entradas,
-        ler,
-        limites or carregar_json("limites.json"),
-        excecoes or carregar_json("excecoes.json"),
-    )
+    padrao = {"limites": carregar_json("limites.json"), "excecoes": carregar_json("excecoes.json")}
+    padrao.update({chave: valor for chave, valor in configuracao.items() if valor})
+    return Contexto(raiz, Selecao(entradas, entradas), ler, Configuracao(**padrao))
 
 
 class RepositorioTemporario:
