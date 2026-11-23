@@ -8,7 +8,7 @@ description: Generate an interactive bash wizard that walks a human through step
 
 A **wizard** is a bash script that walks a human, step by step, through a manual procedure that's tedious to do by hand and tedious to re-explain to an AI every time. It opens each URL, says exactly what to click and copy, captures the values, writes them where they belong (`.env`, GitHub secrets), confirms at every stage, and shows how many stages are left. It might configure third-party services, run a one-off migration, or move the project from one state to another.
 
-The delightful UX is already solved by [template.sh](template.sh): stage-by-stage progress, confirmation gates, cross-platform URL opening (including WSL), hidden secret entry, idempotent `.env` upserts, `gh secret`/`gh variable` writes, recoverable-input retry helpers, and a closing summary. **Your job is only to scope the procedure and author its stages.** The library above the `STAGES` marker is identical in every wizard; that consistency is the point: never hand-edit it.
+The delightful UX is already solved by [template.sh](template.sh): stage-by-stage progress, confirmation gates, cross-platform URL opening (including WSL), hidden secret entry, idempotent `.env` upserts, `gh secret`/`gh variable` writes, recoverable-input retry helpers, and a closing summary. **Your job is only to scope the procedure and author its stages.** The library above the `: STAGES` line is identical in every wizard; that consistency is the point: never hand-edit it.
 
 Every wizard is resilient by default. Invalid, empty, mismatched, or otherwise recoverable input repeats the same question while preserving accepted values; only `Ctrl-C`, an explicit cancel choice, or refusal of a security/irreversibility confirmation ends the run.
 
@@ -37,7 +37,22 @@ For each stage, write the precise path a human follows: which URL to open, what 
 
 Copy `template.sh` to the target path. Replace the example stage with one `stage` per step, in dependency order. Use the library helpers: `stage`, `say`/`step`, `open_url`, `ask`/`ask_secret`, `write_env`, `set_secret`/`set_var`, `pause`/`confirm`. Set `TOTAL_STAGES` to the number of stages you wrote.
 
-Hold the bar the template sets: open the URL before asking for its value, use `ask_secret_confirm` for a new secret, use `ask_valid` for constrained visible input, `write_env` every persisted environment value, `set_secret` only the values CI actually needs, and `confirm` before any irreversible action. Recoverable validation stays inside those retry helpers rather than exiting the script. Each `stage` clears the screen so only the current step is visible: keep a stage to one focused task so nothing the human needs scrolls away. Don't touch the library above the marker.
+Hold the bar the template sets: open the URL before asking for its value, use `ask_secret_confirm` for a new secret, use `ask_valid` for constrained visible input, `write_env` every persisted environment value, `set_secret` only the values CI actually needs, and `confirm` before any irreversible action. Recoverable validation stays inside those retry helpers rather than exiting the script. Each `stage` clears the screen so only the current step is visible: keep a stage to one focused task so nothing the human needs scrolls away. Don't touch the library above the `: STAGES` line.
+
+The library helpers, with their arguments:
+
+- `banner "Title"`: the opening frame, saying what the wizard does.
+- `stage "Name"`: clears the screen, announces the stage and shows progress; the clear does nothing when output is not a terminal, so piped logs stay readable.
+- `say "..."`: a plain instruction line. `step "..."`: an action the human takes in the browser. `note "..."` and `warn "..."`: a dim line and a warning.
+- `open_url URL`: opens the URL in the human's browser, on any platform including WSL.
+- `pause "msg"`: waits for the human to confirm they did the manual part. `confirm "question"`: a y/N gate that returns success on yes.
+- `ask KEY "Prompt"`: reads a visible value into `$KEY`; on a re-run it offers the value already in the `.env` file as the default (Enter keeps it). `ask_secret KEY "Prompt"`: the same with hidden input.
+- `ask_valid KEY "Prompt" VALIDATOR "Error"`: retries until `VALIDATOR`, a function that receives the entered value as its only argument, succeeds.
+- `ask_secret_confirm KEY "Prompt"`: retries while the secret is empty or the repeat does not match.
+- `choose KEY "Prompt" option...`: asks until one numbered option is selected.
+- `write_env KEY VALUE`: upserts `KEY=VALUE` into the `.env` file, creating it and replacing an existing line; safe to repeat.
+- `set_secret NAME VALUE`: sets a GitHub Actions repo secret through `gh`; if `gh` is missing or not logged in, it warns and records the item for the closing summary. `set_var NAME VALUE`: the same for a repo variable, which is not secret.
+- `finish`: clears the screen and shows a summary of everything configured.
 
 ### 4. Verify and hand off
 
