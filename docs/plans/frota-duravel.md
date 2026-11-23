@@ -197,10 +197,10 @@ O `crew.py` tem 772 linhas e passa de 900 com a #7; o teto de tamanho que vem da
 
 Registradas com `crew.py ask`, cada uma com a recomendação:
 
-1. **D40** Quem retoma o worker depois de um restart: o crew, pelo comando registrado no Herdr, ou o resume padrão do Herdr.
-2. **D41** A política de retomada automática da seção 2.
-3. **D42** O que acontece no PC depois de queda de energia: só a tarefa de logon, ou também ligar sozinho e entrar sem senha.
-4. **D43** Os tetos de workers e os limiares de disco e RAM, e se acima do teto o `spawn` enfileira ou recusa.
-5. **D44** A VPS como lugar padrão dos workers.
-6. **D45** Fechar sozinho o worker mesclado e com relatório.
+1. **D40** (decidida: o crew) Quem retoma o worker depois de um restart: o comando do crew registrado no Herdr, com o `revive` como recuo.
+2. **D41** (decidida: aprovada como está) A política de retomada automática da seção 2.
+3. **D42** (decidida: só a tarefa de logon) O PC não liga sozinho nem entra sem senha.
+4. **D43** (decidida: 10 no PC, 6 na VPS, fila) Tetos e limiares de disco e RAM da seção 3.
+5. **D44** (decidida: sim, com vigia próprio) A VPS como lugar padrão dos workers.
+6. **D45** (decidida: sim) Fechar sozinho o worker mesclado e com relatório.
 7. **D46** O espaço do C: hoje (WSL, Docker, bundle do Claude).
