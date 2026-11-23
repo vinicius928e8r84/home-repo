@@ -13,3 +13,4 @@ Preferências do dono, ditas em 2026-11-23.
 - O glossário do home-repo (`GLOSSARY.md`) é definido aos poucos, na conversa, para que o dono e o chief fiquem cada vez mais alinhados.
 - O chief só orquestra: toda tarefa, inclusive página lavish, wayfinder e sessão de grill, vai para um worker, e o chief atualiza o dono no chat quando ela termina (2026-11-23).
 - Do sf-kit (github.com/fullstacksushil/sf-kit) o dono quer: teto de tamanho por arquivo, freios antes de aceleradores e revisor que é outro agente. Rotinas e automações virão; o dono quer saber organizá-las e ver se deram certo ou falharam.
+- Nenhuma decisão do dono pode se perder no chat. Toda decisão pendente (merge, lavish sem resposta, regra a definir) vira registro com `crew.py ask`, e toda mensagem do chief termina com o mesmo bloco "Suas decisões", tirado do quadro, com link e recomendação em cada uma. Assim o dono lê só a última mensagem e sai respondendo (2026-11-23).
