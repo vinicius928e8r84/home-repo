@@ -23,7 +23,7 @@ export default function (pi: any) {
 
   const herdr = (args: string[], done?: () => void) => {
     withoutBreakingTheSession(() => {
-      execFile("herdr", args, { windowsHide: true }, () => done?.());
+      execFile(process.env.CREW_HERDR_BIN || "herdr", args, { windowsHide: true }, () => done?.());
     });
   };
 
