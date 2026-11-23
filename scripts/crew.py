@@ -14,6 +14,7 @@ chief's pane inside Herdr.
   python scripts/crew.py read <name>
   python scripts/crew.py close <name>
   python scripts/crew.py watch          (spawn starts it by itself, hidden)
+  python scripts/crew.py guard          (the chief's turn-end hook runs it: no worker left unwatched)
 
 Repos come from repos.json, models from model_routing.json. Every command
 prints JSON; a failure prints {"ok": false, "step": ..., "error": ...} and
@@ -815,6 +816,19 @@ def cmd_watch(a):
         time.sleep(a.every)
 
 
+def cmd_guard(a):
+    """The end of a chief's turn must not leave an open worker with a dead watcher: start it again. Silent when all is well."""
+    if not workers() or watcher_alive():
+        return dict(ok=True, revived=False)
+    start_watcher(my_pane("guard"))
+    deadline = time.time() + a.wait
+    while not watcher_alive():
+        if time.time() > deadline:
+            raise Fail("guard", "the watcher was started but wrote no heartbeat in %ds; see %s" % (a.wait, posix(os.path.join(STATE, "watch.log"))))
+        time.sleep(0.5)
+    return dict(ok=True, revived=True)
+
+
 def main():
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
@@ -872,6 +886,9 @@ def main():
     s.add_argument("--unstarted", type=int, default=UNSTARTED_MINUTES, help="minutes a worker may sit at 0 turns before it counts as never started")
     s.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_watch)
+    s = sub.add_parser("guard", help="restart the watcher when a worker is open and it is dead; the chief's turn-end hook runs this")
+    s.add_argument("--wait", type=int, default=15, help="seconds to wait for the restarted watcher's first heartbeat")
+    s.set_defaults(fn=cmd_guard)
     a = p.parse_args()
     try:
         result = a.fn(a)
