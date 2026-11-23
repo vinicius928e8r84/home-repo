@@ -1,7 +1,5 @@
 preview = true
 target-version = "py310"
-# Motivo: scripts/crew.py tem funções acima dos limites de saúde; outra tarefa o divide em
-# módulos e esta exclusão sai junto. Espelha scripts/freios/ignorar.json.
 extend-exclude = [
   "scripts/crew.py",
 ]
