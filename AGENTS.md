@@ -10,9 +10,9 @@ Os skills daqui valem para qualquer repo; o que serve a um repo só vive nele. S
 
 Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesquisas vão para o repo de que a tarefa trata, seguindo o `docs/agents/` dele quando existir. Ficam neste repo (`GLOSSARY.md` no lugar de `CONTEXT.md`) só quando a tarefa é sobre ele ou cruza repos.
 
-## Teto de tamanho
+## Freios
 
-Arquivo acima de ~5.000 tokens (bytes / 4) não é commitado: divida pelas costuras, nunca espremendo código; ligue o hook uma vez por clone com `git config core.hooksPath .githooks`.
+`python scripts/freios/freios.py --commit` confere o que está no commit; `--tudo` confere o repo inteiro e os commits da branch. Cada verificação diz o conserto quando falha. Os tetos ficam em `scripts/freios/limites.json` e as exceções, com motivo, em `scripts/freios/excecoes.json`; mudar um deles é decisão do dono. Ligue os ganchos uma vez por clone com `git config core.hooksPath .githooks`.
 
 ## Wiki
 

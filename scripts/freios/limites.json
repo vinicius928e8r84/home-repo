@@ -1,0 +1,212 @@
+{
+  "tamanho": {
+    "bytes_maximos": 20000,
+    "linhas_maximas": 1000,
+    "extensoes_de_codigo": [
+      ".py",
+      ".ts",
+      ".mts",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".sh",
+      ".ps1"
+    ]
+  },
+  "comentarios": {
+    "extensoes": [
+      ".py",
+      ".ts",
+      ".mts",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".sh",
+      ".ps1",
+      ".yml",
+      ".yaml",
+      ".toml"
+    ],
+    "diretivas": [
+      "^# *noqa: *[A-Z]+[0-9]+( *, *[A-Z]+[0-9]+)*$",
+      "^# *ruff: *noqa: *[A-Z]+[0-9]+( *, *[A-Z]+[0-9]+)*$",
+      "^// *@ts-expect-error$"
+    ]
+  },
+  "segredo": {
+    "arquivos_proibidos": [
+      ".env",
+      ".env.*",
+      "*.pem",
+      "*.p12",
+      "*.pfx",
+      "*.keystore",
+      "*.jks",
+      ".npmrc",
+      ".netrc",
+      "id_rsa",
+      "id_ed25519",
+      "id_ecdsa",
+      "id_iphone",
+      "credentials.json",
+      "service-account*.json",
+      "secret_key.json",
+      "*_key.json",
+      "*.kdbx"
+    ]
+  },
+  "binario": {
+    "extensoes_proibidas": [
+      ".dmg",
+      ".exe",
+      ".msi",
+      ".zip",
+      ".tgz",
+      ".gz",
+      ".bz2",
+      ".xz",
+      ".7z",
+      ".rar",
+      ".deb",
+      ".rpm",
+      ".pkg",
+      ".appimage",
+      ".tar",
+      ".iso",
+      ".img",
+      ".apk",
+      ".ipa",
+      ".jar",
+      ".asar",
+      ".dll",
+      ".so",
+      ".dylib",
+      ".node",
+      ".pyc",
+      ".sqlite",
+      ".db"
+    ],
+    "assinaturas_proibidas": [
+      {
+        "nome": "executável Windows (MZ)",
+        "hex": "4d5a"
+      },
+      {
+        "nome": "executável Linux (ELF)",
+        "hex": "7f454c46"
+      },
+      {
+        "nome": "Mach-O 64 bits",
+        "hex": "cffaedfe"
+      },
+      {
+        "nome": "Mach-O 32 bits",
+        "hex": "cefaedfe"
+      },
+      {
+        "nome": "Mach-O universal",
+        "hex": "cafebabe"
+      },
+      {
+        "nome": "arquivo ZIP",
+        "hex": "504b0304"
+      },
+      {
+        "nome": "arquivo gzip",
+        "hex": "1f8b"
+      },
+      {
+        "nome": "pacote ar (.deb)",
+        "hex": "213c617263683e"
+      }
+    ],
+    "megabytes_maximos": 8,
+    "lixo": [
+      "*.bak",
+      "*.bak-*",
+      "*.bak.*",
+      "*.orig",
+      "*.rej",
+      "*.swp",
+      "*~",
+      "*.antes-*",
+      ".DS_Store",
+      "*.log",
+      "node_modules/"
+    ]
+  },
+  "sintaxe": {
+    "json": [
+      "*.json"
+    ]
+  },
+  "orcamento": {
+    "arquivos": [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "wiki/index.md"
+    ],
+    "tokens_dos_arquivos": 800,
+    "tokens_das_descricoes": 1500
+  },
+  "autoria": {
+    "emails_do_dono": [
+      "sadvini360@gmail.com",
+      "48294278+vinicius928e8r84@users.noreply.github.com"
+    ],
+    "emails_de_commit_aceitos": [
+      "noreply@github.com"
+    ]
+  },
+  "ferramentas": [
+    {
+      "nome": "ruff",
+      "quando_existe": [
+        "scripts/freios/ruff.toml"
+      ],
+      "comando": [
+        "ruff",
+        "check",
+        "--no-cache",
+        "--config",
+        "scripts/freios/ruff.toml"
+      ],
+      "alvo_tudo": [
+        "."
+      ],
+      "extensoes": [
+        ".py"
+      ]
+    },
+    {
+      "nome": "eslint",
+      "quando_existe": [
+        "scripts/freios/eslint.config.mjs"
+      ],
+      "comando": [
+        "npx",
+        "--no-install",
+        "eslint",
+        "--config",
+        "scripts/freios/eslint.config.mjs"
+      ],
+      "alvo_tudo": [
+        ".pi",
+        "scripts"
+      ],
+      "extensoes": [
+        ".ts",
+        ".mts",
+        ".js",
+        ".mjs",
+        ".cjs"
+      ]
+    }
+  ],
+  "funcoes": {
+    "linhas_maximas": 69,
+    "extensoes": [
+      ".py"
+    ]
+  }
+}

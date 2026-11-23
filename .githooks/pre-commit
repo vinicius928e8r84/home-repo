@@ -1,4 +1,3 @@
 #!/bin/sh
-# From sf-kit. Turn it on once per clone: git config core.hooksPath .githooks
 set -e
-git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 python -I scripts/check_file_tokens.py
+exec python scripts/freios/freios.py --commit

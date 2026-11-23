@@ -1,0 +1,26 @@
+{
+  "tamanho": [
+    {
+      "glob": "package-lock.json",
+      "motivo": "trava de pacotes gerada pelo npm; ninguém a edita à mão"
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "motivo": "trava de pacotes gerada pelo pnpm; ninguém a edita à mão"
+    },
+    {
+      "glob": "yarn.lock",
+      "motivo": "trava de pacotes gerada pelo yarn; ninguém a edita à mão"
+    }
+  ],
+  "comentarios": [],
+  "sintaxe": [],
+  "segredo": [],
+  "binario": [],
+  "funcoes": [
+    {
+      "glob": "scripts/crew.py",
+      "motivo": "tem funções acima do teto; outra tarefa o divide em módulos e esta exceção sai junto"
+    }
+  ]
+}
