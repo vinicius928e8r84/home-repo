@@ -43,15 +43,14 @@ class Clock:
 
 
 class FakeHerdr:
-    def __init__(self, crew, state_dir):
-        self.crew, self.state_dir = crew, state_dir
+    def __init__(self, crew):
+        self.crew = crew
         self.panes = {CHIEF: dict(alive=True, agent="pi")}
         self.sent = {}
         self.typed = {}
         self.drop_texts = 0
         self.on_close = None
         self.state_files = {}
-        self.calls = []
         self.next_pane = 0
         self.screen = "screen"
         self.handlers = {
@@ -66,7 +65,6 @@ class FakeHerdr:
         }
 
     def __call__(self, step, *args):
-        self.calls.append(args)
         handler = self.handlers.get(args[:2])
         if handler is None:
             raise AssertionError("the fake Herdr does not know %r" % (args,))
@@ -145,11 +143,10 @@ class CrewCase(unittest.TestCase):
         spec.loader.exec_module(self.crew)
         self.clock = Clock()
         self.crew.time = self.clock
-        self.herdr = FakeHerdr(self.crew, self.state)
+        self.herdr = FakeHerdr(self.crew)
         self.crew.herdr = self.herdr
         self.crew.start_watcher = lambda *a, **k: 0
         self.crew.watcher_alive = lambda: True
-        self.write_chief_state("idle")
 
     def make_repo(self):
         origin = os.path.join(self.tmp, "origin.git")
@@ -167,12 +164,6 @@ class CrewCase(unittest.TestCase):
         git(where, "add", ".")
         git(where, "commit", "-q", "-m", name)
         return git(where, "rev-parse", "HEAD")
-
-    def write_chief_state(self, state):
-        path = os.path.join(self.state, "_chief", CHIEF.replace(":", "_") + ".json")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(dict(state=state), f)
 
     def worker_meta(self, name, pane, fields):
         folder = os.path.join(self.state, name)
@@ -216,7 +207,11 @@ class CrewCase(unittest.TestCase):
             self.crew.cmd_watch(args)
 
     def told_chief(self):
-        return self.herdr.sent.get(CHIEF, [])
+        inbox = os.path.join(self.state, "_chief", CHIEF.replace(":", "_") + ".inbox")
+        if not os.path.exists(inbox):
+            return []
+        with open(inbox, encoding="utf-8") as f:
+            return f.read().splitlines()
 
 
 class WatcherHistory(CrewCase):
@@ -247,6 +242,13 @@ class WatcherHistory(CrewCase):
         self.assertNotIn("D15", self.told_chief()[0])
         self.watch()
         self.assertEqual(len(self.told_chief()), 1)
+
+
+    def test_a_turn_that_ended_alone_does_not_wake_the_chief(self):
+        self.add_worker(turns=1)
+        self.watch()
+        self.assertIn("turn_ended", [e["kind"] for e in self.events()])
+        self.assertEqual(self.told_chief(), [])
 
 
 class SpawnDelivery(CrewCase):

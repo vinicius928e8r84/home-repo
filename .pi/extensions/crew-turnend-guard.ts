@@ -5,6 +5,16 @@ import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
 
 const POLL_MS = 2000;
 
+function chiefFolder(here: string): string | undefined {
+  const chief = process.env.HERDR_ENV === "1" && process.env.HERDR_PANE_ID && !process.env.CREW_STATE_FILE;
+  return chief && fs.existsSync(path.join(here, "scripts", "crew.py")) ? here : undefined;
+}
+
+function inboxOf(folder: string): string {
+  const dir = process.env.CREW_STATE_DIR || path.join(folder, "state", "crew");
+  return path.join(dir, "_chief", `${process.env.HERDR_PANE_ID!.replace(/[^A-Za-z0-9_-]/g, "_")}.inbox`);
+}
+
 export default function (pi: any) {
   let cwd: string | undefined;
   let followup = false;
@@ -28,14 +38,11 @@ export default function (pi: any) {
   };
 
   pi.on("session_start", async (_event: any, ctx: any) => {
-    const here = ctx?.cwd ?? process.cwd();
-    const chief = process.env.HERDR_ENV === "1" && process.env.HERDR_PANE_ID && !process.env.CREW_STATE_FILE;
-    cwd = chief && fs.existsSync(path.join(here, "scripts", "crew.py")) ? here : undefined;
+    cwd = chiefFolder(ctx?.cwd ?? process.cwd());
     if (timer) clearInterval(timer);
     timer = undefined;
     if (!cwd) return;
-    const dir = process.env.CREW_STATE_DIR || path.join(cwd, "state", "crew");
-    const inbox = path.join(dir, "_chief", `${process.env.HERDR_PANE_ID!.replace(/[^A-Za-z0-9_-]/g, "_")}.inbox`);
+    const inbox = inboxOf(cwd);
     timer = setInterval(() => void deliverInbox(inbox), POLL_MS);
     timer.unref?.();
   });

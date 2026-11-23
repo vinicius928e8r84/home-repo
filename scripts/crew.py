@@ -92,8 +92,6 @@ def herdr(step, *args):
 
 
 def tell_chief(pane, text):
-    """Leave a notice for the chief's Pi (crew-turnend-guard.ts), which queues it for after the current turn.
-    Never typed into the pane: that cut off whatever the owner was writing."""
     folder = os.path.join(STATE, "_chief")
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".inbox"), "a", encoding="utf-8") as f:
