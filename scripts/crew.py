@@ -38,7 +38,7 @@ CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
 DECISIONS = os.path.join(STATE, "decisions.jsonl")
 NOTIFIED = os.path.join(STATE, "notify.cursor")
-NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started", "not_pi"}
+NOTIFY = {"report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started", "not_pi"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
 UNSTARTED_MINUTES = 4
 
@@ -91,9 +91,13 @@ def herdr(step, *args):
         return text
 
 
-def chief_state(pane):
-    """What the chief in `pane` last wrote. The file is per pane, so no other Pi session can overwrite it."""
-    return file_state(os.path.join(STATE, "_chief", re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".json")).get("state")
+def tell_chief(pane, text):
+    """Leave a notice for the chief's Pi (crew-turnend-guard.ts), which queues it for after the current turn.
+    Never typed into the pane: that cut off whatever the owner was writing."""
+    folder = os.path.join(STATE, "_chief")
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".inbox"), "a", encoding="utf-8") as f:
+        f.write(" ".join(text.split()) + "\n")
 
 
 def passthrough():
@@ -611,6 +615,13 @@ def cmd_board(a):
             last = done[-1]
             line += " Último fechado: %s (%s): %s" % (last["name"], ago(last["closed"]), result_of(last) or "sem relatório")
         out.append(line)
+    out.append("")
+    out.append("## Cole no fim da sua mensagem ao dono")
+    out.append("")
+    out.append("**Suas decisões**" + ("" if open_decisions else ": nenhuma."))
+    for d in sorted(open_decisions, key=lambda d: d["at"]):
+        out.append("- **%s** [%s] %s" % (d["id"], d["repo"], d["question"]))
+        out.append("  - Recomendação: %s" % (d.get("recommend") or "nenhuma"))
     print("\n".join(out))
     return None
 
@@ -751,7 +762,7 @@ def notice_cursor(total):
 
 
 def describe(event):
-    text = {"turn_ended": "terminou um turno", "gone": "o painel fechou",
+    text = {"gone": "o painel fechou",
             "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "não progride: a tela e os commits não mudam há tempo demais",
             "never_started": "o painel abriu mas o Pi nunca começou (0 turnos)"}
     if event["kind"] == "not_pi":
@@ -782,14 +793,13 @@ def notify(chief):
     events = read_events()
     told = notice_cursor(len(events))
     news = [e for e in events[told:] if e and e["kind"] in NOTIFY]
-    if not news:
-        write_text(NOTIFIED, str(len(events)))
-    elif chief_state(chief) == "idle":
+    if news:
         try:
-            send("notify", chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
-            write_text(NOTIFIED, str(len(events)))
-        except Fail as e:
-            print(json.dumps(dict(ok=False, step=e.step, error=e.error)), flush=True)
+            tell_chief(chief, "[crew] %s. Rode `python scripts/crew.py board` e atualize o dono." % "; ".join(describe(e) for e in news))
+        except OSError as e:
+            print(json.dumps(dict(ok=False, step="notify", error=str(e))), flush=True)
+            return
+    write_text(NOTIFIED, str(len(events)))
 
 
 def cmd_watch(a):
