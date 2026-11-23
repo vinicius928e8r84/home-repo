@@ -26,3 +26,4 @@ Para delegar a agentes, cada um no seu worktree: `python scripts/crew.py --help`
 
 - Nova-AI (port do Nova AI para macOS + iPhone, em Electron).
 - PerpetualMiner (extensão Chrome que minera frases e as envia ao Anki).
+- Firstmate da VPS (supervisiona a frota do PerpetualMiner e do Nova-AI): `python scripts/firstmate.py --help` deixa uma nota e lê a resposta; pergunte a ele antes de mexer numa PR que a frota toca.
