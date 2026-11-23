@@ -7,11 +7,11 @@ import sys
 import types
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_crew import CHIEF, CrewCase
+from scripts.test_crew import CHIEF
+from scripts.test_crew_vigia import VigiaCase
 
 
-class ConversaCase(CrewCase):
+class ConversaCase(VigiaCase):
     def setUp(self):
         super().setUp()
         os.environ.pop("CREW_AGENT_NAME", None)
@@ -37,18 +37,15 @@ class ConversaCase(CrewCase):
             self.crew.cmd_board(types.SimpleNamespace(json=False))
         return out.getvalue()
 
-    def kinds(self):
-        return [e["kind"] for e in self.events()]
-
 
 class QuestionToTheChief(ConversaCase):
-    def test_reaches_the_chief_inbox_at_once_with_the_question_and_how_to_answer(self):
+    def test_the_watcher_puts_it_in_the_chief_inbox_as_a_question_with_its_title(self):
         result = self.ask()
-        self.assertEqual((result["id"], result["para"], result["woke_chief"]), ("P1", "chief", True))
-        told = self.told_chief()
+        self.assertEqual((result["id"], result["para"]), ("P1", "chief"))
+        told = self.rodada()
         self.assertEqual(len(told), 1)
-        for part in ("t-job", "P1", "qual abordagem?", "a primeira", "answer P1"):
-            self.assertIn(part, told[0])
+        self.assertIn("t-job pergunta ao chief: P1 «qual abordagem?»", told[0])
+        self.assertNotIn("decisão", told[0])
 
     def test_without_para_it_goes_to_the_chief(self):
         self.assertEqual(self.ask()["para"], "chief")
@@ -68,10 +65,10 @@ class QuestionToTheChief(ConversaCase):
         self.assertIn("## Perguntas ao chief (1)", chief_part)
         self.assertIn("qual abordagem?", chief_part)
 
-    def test_the_watcher_does_not_announce_it_a_second_time(self):
-        self.watch()
+    def test_it_is_announced_once_and_never_twice(self):
         self.ask()
-        self.watch()
+        self.rodada()
+        self.rodada()
         self.assertEqual(len(self.told_chief()), 1)
 
     def test_a_worker_waiting_on_the_chief_is_not_a_worker_in_trouble(self):
@@ -81,11 +78,8 @@ class QuestionToTheChief(ConversaCase):
         self.assertEqual([m["name"] for m in board["running"]], ["t-job"])
         self.assertEqual(board["trouble"], [])
 
-    def test_without_a_watcher_it_is_recorded_and_says_the_chief_was_not_woken(self):
-        os.remove(os.path.join(self.state, "watch.heartbeat"))
-        result = self.ask()
-        self.assertFalse(result["woke_chief"])
-        self.assertIn("watcher is not running", result["note"])
+    def test_it_stays_on_the_board_until_answered(self):
+        self.ask()
         self.assertEqual([q["id"] for q in self.board()["questions"]], ["P1"])
 
     def test_the_answer_reaches_the_worker_as_a_question_answer(self):
@@ -101,7 +95,6 @@ class DecisionForTheOwner(ConversaCase):
         self.assertEqual((result["id"], result["para"]), ("D1", "dono"))
         self.assertIn("decision_needed", self.kinds())
         self.assertNotIn("question_for_chief", self.kinds())
-        self.assertEqual(self.told_chief(), [])
         board = self.board()
         self.assertEqual([d["id"] for d in board["decisions"]], ["D1"])
         self.assertEqual(board["questions"], [])

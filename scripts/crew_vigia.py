@@ -54,6 +54,8 @@ def titulo(evento):
 
 def texto_do_pedido(evento):
     numero = evento.get("id") or ""
+    if numero.startswith("P"):
+        return "%s pergunta ao chief: %s «%s»" % (evento["worker"], numero, titulo(evento))
     return "%s precisa de uma decisão: %s «%s»" % (evento["worker"], numero, titulo(evento))
 
 

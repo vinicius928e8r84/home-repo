@@ -16,6 +16,7 @@ GIT_TIMEOUT = os.environ.get("CREW_REMOTE_GIT_TIMEOUT", "120")
 PANE_ON_HOST = re.compile(r"@([A-Za-z0-9_.@-]+):(\S+)")
 PANE_VERBS = {"get", "run", "read", "send-text", "send-keys", "close"}
 ASK_COMMAND = re.compile(r'python3? "[^"]*crew\.py" ask')
+TELL_COMMAND = re.compile(r'python3? "[^"]*crew\.py" tell chief')
 
 ASK_SCRIPT = '''import argparse
 import datetime
@@ -25,9 +26,11 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("question")
-parser.add_argument("--recommend", required=True)
-parser.add_argument("--para", choices=["chief", "dono"], default="chief")
+parser.add_argument("--recommend")
+parser.add_argument("--para", choices=["chief", "dono", "aviso"], default="chief")
 args = parser.parse_args()
+if args.para != "aviso" and not args.recommend:
+    parser.error("--recommend is required")
 state_file = os.environ.get("CREW_STATE_FILE")
 if not state_file:
     print(json.dumps(dict(ok=False, step="ask", error="CREW_STATE_FILE is not set: run this from the worker's own pane")))
@@ -132,7 +135,11 @@ def mirror(path, text):
 
 def register_ask(meta, line):
     ask = json.loads(line)
-    crew.module("crew_conversa").register(meta["name"], meta["repo"], dict(question=ask["question"], recommend=ask.get("recommend")), ask.get("para", "dono"))
+    conversa = crew.module("crew_conversa")
+    if ask.get("para") == "aviso":
+        conversa.notice(meta["name"], ask["question"])
+    else:
+        conversa.register(meta["name"], meta["repo"], dict(question=ask["question"], recommend=ask.get("recommend")), ask.get("para", "dono"))
 
 
 def register_asks(meta, text):
@@ -221,6 +228,7 @@ def upload(meta, home, context_block):
     os.makedirs(folder, exist_ok=True)
     brief = crew.BRIEF.format(home=home + "/home-repo", context_block=context_block, **dict(meta, report=meta["remote_report"]))
     brief = ASK_COMMAND.sub('python3 "%s/ask.py"' % meta["remote_dir"], brief)
+    brief = TELL_COMMAND.sub('python3 "%s/ask.py" --para aviso' % meta["remote_dir"], brief)
     crew.write_text(os.path.join(folder, "brief.md"), brief)
     put(host, meta["brief"], brief)
     put(host, meta["remote_dir"] + "/ask.py", ASK_SCRIPT)

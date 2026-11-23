@@ -48,12 +48,8 @@ def register(name, repo, ask, para):
     question, recommend = ask["question"], ask.get("recommend")
     entry = dict(id=next_id(para), at=crew.now(), worker=name, repo=repo, question=question, recommend=recommend, status="open", para=para)
     crew.log_decision(entry)
-    if para == "dono":
-        crew.emit("decision_needed", name, id=entry["id"], question=question)
-        return entry, None
-    crew.emit("question_for_chief", name, id=entry["id"], question=question)
-    text = "[crew] %s pergunta ao chief (%s): %s Recomendação do worker: %s. Responda com `python scripts/crew.py answer %s \"...\"`."
-    return entry, wake(text % (name, entry["id"], question, recommend or "nenhuma", entry["id"]))
+    crew.emit("decision_needed" if para == "dono" else "question_for_chief", name, id=entry["id"], question=question)
+    return entry
 
 
 def ask(a):
@@ -67,21 +63,20 @@ def ask(a):
     para = a.para or ("dono" if name == "chief" else "chief")
     if name == "chief" and para == "chief":
         raise Fail("ask", "the chief has no one above it but the owner: use --para dono")
-    entry, woke = register(name, repo, dict(question=a.question, recommend=a.recommend), para)
-    result = dict(ok=True, id=entry["id"], para=para, next=NEXT)
-    if para == "chief":
-        result.update(woke_chief=woke, note=None if woke else UNKNOWN_CHIEF)
-    return result
+    entry = register(name, repo, dict(question=a.question, recommend=a.recommend), para)
+    return dict(ok=True, id=entry["id"], para=para, next=NEXT)
+
+
+def notice(who, message):
+    if not chief_pane():
+        raise Fail("tell", UNKNOWN_CHIEF)
+    if not wake("[crew] %s avisa o chief: %s" % (who, message)):
+        raise Fail("tell", "could not write to the chief's inbox")
+    crew.emit("told_chief", who, message=message)
 
 
 def tell(a):
-    pane = chief_pane()
-    if not pane:
-        raise Fail("tell", UNKNOWN_CHIEF)
-    who = os.environ.get("CREW_AGENT_NAME") or "chief"
-    if not wake("[crew] %s avisa o chief: %s" % (who, a.message)):
-        raise Fail("tell", "could not write to the chief's inbox")
-    crew.emit("told_chief", who, message=a.message)
+    notice(os.environ.get("CREW_AGENT_NAME") or "chief", a.message)
     return dict(ok=True, para="chief", delivered=True, note="a notice only; to get an answer use `ask --para chief`")
 
 

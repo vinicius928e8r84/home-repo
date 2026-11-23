@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -218,6 +220,33 @@ class RemoteCrewTest(unittest.TestCase):
         sent = [entry for entry in self.herdr_log() if entry[:2] == ["pane", "send-text"]][-1]
         self.assertEqual(sent[2], "w1:p2")
         self.assertIn("pode", sent[3])
+
+    def test_tell_chief_from_the_host_reaches_the_chief_inbox_through_the_sync(self):
+        self.spawn()
+        remote = self.vps + "/crew-state/home-toy"
+        with open(remote + "/brief.md", encoding="utf-8") as f:
+            brief = f.read()
+        self.assertNotIn("crew.py\" tell chief", brief)
+        command = re.search(r'python3 "[^"]*ask\.py" --para aviso "o aviso"', brief).group(0)
+        os.makedirs(self.state, exist_ok=True)
+        with open(self.state + "/watch.heartbeat", "w", encoding="utf-8") as f:
+            json.dump(dict(chief="w3:p3"), f)
+        env = dict(os.environ, CREW_STATE_FILE=remote + "/state.json")
+        told = subprocess.run([sys.executable] + shlex.split(command)[1:], capture_output=True, text=True, env=env)
+        self.assertEqual(json.loads(told.stdout)["ok"], True, told)
+        for _ in range(2):
+            board, _ = self.crew("board", "--json")
+        self.assertEqual(board["decisions"] + board["questions"], [])
+        with open(self.state + "/_chief/w3_p3.inbox", encoding="utf-8") as f:
+            self.assertEqual(f.read().splitlines(), ["[crew] home-toy avisa o chief: o aviso"])
+
+    def test_an_ask_to_the_chief_still_needs_a_recommendation_on_the_host(self):
+        self.spawn()
+        remote = self.vps + "/crew-state/home-toy"
+        ask = subprocess.run([sys.executable, remote + "/ask.py", "qual?"], capture_output=True, text=True,
+                             env=dict(os.environ, CREW_STATE_FILE=remote + "/state.json"))
+        self.assertNotEqual(ask.returncode, 0)
+        self.assertIn("--recommend is required", ask.stderr)
 
     def test_an_ask_without_para_from_the_host_is_a_question_to_the_chief(self):
         self.spawn()
