@@ -133,6 +133,106 @@ function state(tick) {
   return { position, direction: moves < span ? 1 : -1, phase: tick % TICKS_PER_MOVE };
 }
 
+// --- Scenes: candidates with their own per-tick animation, beyond a fixed sprite. ---
+
+const C = { cyan: "\x1b[36m", green: "\x1b[32m", yellow: "\x1b[33m", red: "\x1b[31m", blue: "\x1b[34m", magenta: "\x1b[35m", white: "\x1b[37m", gray: "\x1b[90m" };
+
+function canvas() {
+  const row = () => Array.from({ length: WIDTH }, () => [" ", ""]);
+  return [row(), row()];
+}
+
+function put(row, column, text, color) {
+  Array.from(text).forEach((glyph, index) => {
+    const at = column + index;
+    if (at >= 0 && at < WIDTH) row[at] = [glyph, color];
+  });
+}
+
+function paint(rows) {
+  return rows.map((row) => row.map(([glyph, color]) => (color ? color + glyph + RESET : glyph)).join(""));
+}
+
+function bounce(tick, span) {
+  const moves = Math.floor(tick / TICKS_PER_MOVE) % (span * 2);
+  return { position: moves <= span ? moves : span * 2 - moves, direction: moves < span ? 1 : -1 };
+}
+
+// 11. The robot rides a river of bits, eats the $ in its way, sweats, sparks, blinks and trips on a bug.
+function robotScene(tick) {
+  const [top, base] = canvas();
+  const { position, direction } = bounce(tick, WIDTH - 5);
+  const flow = Math.floor(tick / 2);
+  for (let column = 0; column < WIDTH; column += 1) {
+    const gap = (column + flow) % 4 === 0;
+    base[column] = [gap ? " " : "01"[(column * 31 + flow) & 1], C.green];
+  }
+  const passed = (column) => (direction === 1 ? column < position : column > position + 4);
+  const coins = [];
+  for (let column = 8; column < WIDTH - 2; column += 11) coins.push(column);
+  for (const column of coins) put(base, column, passed(column) ? "·" : "$", passed(column) ? C.gray : C.yellow);
+  const bug = Math.floor(WIDTH / 2) - 4;
+  put(base, bug, "ж", C.red);
+
+  const front = direction === 1 ? position + 5 : position - 1;
+  const coinAhead = coins.some((column) => !passed(column) && Math.abs(column - front) <= 2);
+  const onBug = bug >= position && bug <= position + 4;
+  const justAfterBug = direction === 1 ? position - bug : bug - (position + 4);
+  let face = "[o_o]";
+  let speech = tick % 2 ? "*┬*" : "·┬·";
+  if (tick % 23 === 0) face = "[-_-]";
+  if (tick % 61 < 6) speech = "brr";
+  if (coinAhead) [face, speech] = ["[$_$]", "$$$"];
+  if (justAfterBug >= 1 && justAfterBug <= 2) [face, speech] = ["[>_<]", "ops"];
+  if (onBug) [face, speech] = ["[x_x]", "404"];
+  put(base, position, face, onBug ? C.red : C.cyan);
+  put(top, position + 1, speech, onBug ? C.red : coinAhead ? C.yellow : C.cyan);
+
+  // Sweat flying off the head, behind the robot.
+  ["'", "°", "·"].forEach((drop, index) => {
+    if ((tick + index) % 3 === 0) return;
+    const column = direction === 1 ? position - index : position + 4 + index;
+    put(top, column, drop, C.blue);
+  });
+  return paint([top, base]);
+}
+
+// 12. Grows, fires, droops, and turns around at the edges; a blue pill on the way makes it longer.
+function adultScene(tick) {
+  const [top, base] = canvas();
+  const { position, direction } = bounce(tick, WIDTH - 8);
+  for (let column = 0; column < WIDTH; column += 1) {
+    if ((column + Math.floor(tick / 3)) % 6 < 2) base[column] = ["~", C.cyan];
+  }
+  const pill = Math.floor(WIDTH / 2);
+  const past = direction === 1 ? position - pill : pill - (position + 6);
+  if (past < 0) put(base, pill, "o", C.blue);
+  const boosted = past > 0 && past <= 7;
+
+  const cycle = tick % 32;
+  const firing = cycle >= 24 && cycle < 28;
+  const length = boosted ? 5 : cycle < 8 ? 1 : cycle < 16 ? 2 : cycle < 28 ? 3 : 1;
+  const shaft = "=".repeat(length);
+  const start = direction === 1 ? position : position + 6 - (length + 1);
+  put(base, start, direction === 1 ? `8${shaft}D` : `C${shaft}8`, C.magenta);
+  const tip = direction === 1 ? start + length + 1 : start;
+
+  if (firing) {
+    const spray = ["~", "~·", "~·°", " ·°'"][cycle - 24];
+    const text = direction === 1 ? spray : Array.from(spray).reverse().join("");
+    put(base, direction === 1 ? tip + 1 : tip - text.length, text, C.white);
+    put(top, direction === 1 ? tip + 1 : tip - 2, "!!", C.white);
+  } else if (cycle >= 28) {
+    put(top, start, "zzz", C.gray);
+  } else if (boosted) {
+    put(top, start + 1, "!!!", C.blue);
+  }
+  return paint([top, base]);
+}
+
+SKINS.push({ name: "11. IA trabalhando por você (animada)", scene: robotScene });
+SKINS.push({ name: "12. +18 (animado)", scene: adultScene });
+
 // Numbers on the command line pick which candidates to show; none shows them all.
 const picked = process.argv.slice(2).filter((arg) => /^\d+$/.test(arg));
 const SHOWN = picked.length ? SKINS.filter((skin) => picked.includes(skin.name.split(".")[0])) : SKINS;
@@ -140,14 +240,21 @@ const SHOWN = picked.length ? SKINS.filter((skin) => picked.includes(skin.name.s
 function draw(tick) {
   const out = [];
   for (const skin of SHOWN) {
+    if (skin.scene) {
+      out.push(skin.name, ...skin.scene(tick), "");
+      continue;
+    }
     const { position, direction, phase } = state(tick);
     out.push(skin.name, ...frame(skin, position, direction, phase), "");
   }
   return out;
 }
 
-if (process.argv.includes("--frames")) {
-  for (const tick of [8, 60, 130]) console.log(draw(tick).join("\n"));
+// --frames prints stills and exits; --frames=16,96 picks the ticks.
+const stills = process.argv.find((arg) => arg.startsWith("--frames"));
+if (stills) {
+  const ticks = stills.includes("=") ? stills.split("=")[1].split(",").map(Number) : [8, 60, 130];
+  for (const tick of ticks) console.log(draw(tick).join("\n"));
 } else {
   let tick = 0;
   const lines = draw(0).length;
