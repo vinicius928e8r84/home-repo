@@ -192,11 +192,11 @@ O essencial são as PRs 1, 2 e 5: o worker fala com o chief, o chief vê o time 
 | Extra Usage na PR 3 | ficam só as porcentagens e o limite | a regra que ainda pede valor real |
 | `subir` | o chief sobe com um `ask --para dono` novo e responde a Pergunta com "subiu" | um comando |
 
-## Decisões que só o dono toma
+## Decisões do dono
 
-Registradas com `crew.py ask`:
+Registradas com `crew.py ask`, todas respondidas:
 
 1. **Contexto: contar até a compactação ou até a janela** (D56) — decidida: até a compactação, e marcar quantas compactações houve e quando, no painel e nas métricas.
 2. **Custo: estimar pelo preço da API** (D57) — decidida: não; só tokens, e o custo se calcula depois.
 3. **Categorias de PR e onde marcar** (D58) — decidida: só a linha no corpo; as sete são provisórias, num arquivo só.
-4. **Quantas PRs fazer** (D59) — recomendação: as oito, na ordem acima; se for para cortar, ficar com 1, 2, 3, 5 e 6.
+4. **Quantas PRs fazer** (D59) — decidida pelo chief, sem objeção do dono: as oito, na ordem acima, com corte possível depois da 6.
