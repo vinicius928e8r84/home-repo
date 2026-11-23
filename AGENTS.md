@@ -8,6 +8,10 @@ Os skills daqui valem para qualquer repo; o que serve a um repo só vive nele. S
 
 Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesquisas vão para o repo de que a tarefa trata, seguindo o `docs/agents/` dele quando existir. Ficam neste repo (`GLOSSARY.md` no lugar de `CONTEXT.md`) só quando a tarefa é sobre ele ou cruza repos.
 
+## Teto de tamanho
+
+Nenhum arquivo passa de ~5.000 tokens (bytes / 4), para caber inteiro na leitura e na edição de um agente. O pre-commit (`.githooks/pre-commit` → `scripts/check_file_tokens.py`) recusa o arquivo novo ou alterado acima disso. Ligue uma vez por clone: `git config core.hooksPath .githooks`. Ao ser recusado, divida pelas costuras (grupos de funções que mudam juntos); nunca apague código nem o esprema em menos linhas.
+
 ## Wiki
 
 `wiki/index.md` lista o que se sabe sobre o usuário e o trabalho dele fora do código. Consulte-o antes de perguntar algo ao usuário e grave lá o que ele ensinar de duradouro.
