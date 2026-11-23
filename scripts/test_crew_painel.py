@@ -15,7 +15,7 @@ import crew_remote
 import crew_sessao
 import test_crew_remote as remoto
 
-AGORA = datetime.datetime.now().astimezone()
+AGORA = None
 CATALOGO = {"anthropic": {"models": [{"id": "claude-opus-5-5", "name": "Claude Opus 5.5", "contextWindow": 1000000}]}}
 AJUSTES = {"compaction": {"modelOverrides": {"claude-bridge/claude-opus-5-5": {"reserveTokens": 850000}}}}
 
@@ -55,6 +55,8 @@ def gravar(caminho, texto):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        global AGORA
+        AGORA = datetime.datetime.now().astimezone()
         self.tmp = tempfile.mkdtemp(prefix="crew-painel-")
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.estado = os.path.join(self.tmp, "estado")
