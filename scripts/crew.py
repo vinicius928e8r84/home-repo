@@ -36,7 +36,7 @@ CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
 DECISIONS = os.path.join(STATE, "decisions.jsonl")
 NOTIFIED = os.path.join(STATE, "notify.cursor")
-NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started"}
+NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started", "not_pi"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
 UNSTARTED_MINUTES = 4  # a worker idle with 0 turns for this long never started (spawn itself waits at most ~2.5 min)
 
@@ -145,12 +145,18 @@ def find(obj, keys, allowed=None):
     return None
 
 
-def pane_alive(pane):
+def pane_info(pane):
+    """What Herdr says about the pane (agent included), {} when it says nothing useful, None when the pane is gone."""
     try:
-        herdr("pane", "pane", "get", pane)
-        return True
+        reply = herdr("pane", "pane", "get", pane)
     except Fail:
-        return False
+        return None
+    info = reply.get("result", {}).get("pane") if isinstance(reply, dict) else None
+    return info if isinstance(info, dict) else {}
+
+
+def pane_alive(pane):
+    return pane_info(pane) is not None
 
 
 def file_state(path):
@@ -161,13 +167,22 @@ def file_state(path):
         return {}
 
 
-def worker_state(meta):
-    """idle, working or gone: what the worker's own Pi last wrote, unless its pane is closed."""
+def worker_view(meta):
+    """(state, agent): the state is idle, working or gone, what the worker's own Pi last wrote unless its pane is closed;
+    the agent is what Herdr detects in the pane (None when unknown)."""
     state = file_state(meta.get("state_file", "")).get("state", "starting")
     inside = os.environ.get("HERDR_ENV") == "1" or os.environ.get("CREW_HERDR_SESSION")
-    if state != "gone" and meta.get("pane") and inside and not pane_alive(meta["pane"]):
-        return "gone"
-    return state
+    agent = None
+    if state != "gone" and meta.get("pane") and inside:
+        info = pane_info(meta["pane"])
+        if info is None:
+            return "gone", None
+        agent = info.get("agent") if isinstance(info.get("agent"), str) else None
+    return state, agent
+
+
+def worker_state(meta):
+    return worker_view(meta)[0]
 
 
 def send(step, pane, text):
@@ -388,25 +403,39 @@ def minutes_since(stamp):
     return (datetime.datetime.now(then.tzinfo) - then).total_seconds() / 60
 
 
+OWN_COMMIT = ("commit", "rebase (pick)", "rebase (reword)", "rebase (edit)", "rebase (squash)", "rebase (fixup)", "cherry-pick", "revert", "am")
+
+
+def has_own_commit(meta):
+    """Did the worker commit on its branch? A branch that only moved along with the base (a fast-forward) has no
+    commit of its own, and "its head is in the base" would call that a merge. The branch's reflog tells the two apart."""
+    out = subprocess.run(["git", "-C", meta["repo_path"], "log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
+    entries = out.stdout.splitlines() if out.returncode == 0 else []
+    return not entries or any(e.startswith(OWN_COMMIT) for e in entries)  # no reflog (expired, bare): fall back to the head test
+
+
 def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
-    state = worker_state(meta)
+    state, agent = worker_view(meta)
     seen = file_state(meta.get("state_file", ""))
-    snap = dict(state=state, turns=seen.get("turns", 0), report=os.path.exists(meta["report"]), merged=False, stalled=False)
+    snap = dict(state=state, turns=seen.get("turns", 0), report=os.path.exists(meta["report"]), merged=False, stalled=False,
+                agent=agent, not_pi=bool(agent and agent != "pi"))
     snap["unstarted"] = bool(state in ("idle", "starting") and snap["turns"] == 0 and not meta.get("error")
                              and minutes_since(meta.get("started")) > unstarted_minutes)
     if fetch:
         subprocess.run(["git", "-C", meta["repo_path"], "fetch", "--quiet", "origin"], capture_output=True)
     head = subprocess.run(["git", "-C", meta["repo_path"], "rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
-    if head and head != meta.get("base_sha"):
+    if head and head != meta.get("base_sha") and has_own_commit(meta):
         merged = subprocess.run(["git", "-C", meta["repo_path"], "merge-base", "--is-ancestor", head, meta["base"]], capture_output=True)
         snap["merged"] = merged.returncode == 0
     if state == "working" and stall_minutes and seen.get("at"):
-        since = datetime.datetime.fromisoformat(seen["at"].replace("Z", "+00:00"))
-        snap["stalled"] = (datetime.datetime.now(datetime.timezone.utc) - since).total_seconds() > stall_minutes * 60
+        mine = [d for d in decisions().values() if d.get("worker") == meta["name"]]
+        if not any(d.get("status") == "open" for d in mine):
+            quiet = min([minutes_since(seen["at"])] + [minutes_since(d["answered_at"]) for d in mine if d.get("answered_at")])
+            snap["stalled"] = quiet > stall_minutes
     return snap
 
 
-BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False, unstarted=False)
+BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False, unstarted=False, agent=None, not_pi=False)
 
 
 def decisions():
@@ -501,7 +530,7 @@ def cmd_board(a):
         snap = snapshot(meta, False, 20)
         meta["_snap"], meta["_result"] = snap, result_of(meta)
         waiting = [d["id"] for d in open_decisions if d["worker"] == meta["name"]]
-        if meta.get("error") or snap["state"] in ("gone", "starting") or snap["stalled"]:
+        if meta.get("error") or snap["state"] in ("gone", "starting") or snap["stalled"] or snap["not_pi"]:
             trouble.append(meta)
         elif snap["state"] == "working":
             running.append(meta)
@@ -538,7 +567,7 @@ def cmd_board(a):
         out.append("## Com problema (%d)" % len(trouble))
         for m in trouble:
             snap = m["_snap"]
-            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "o painel abriu mas o Pi nunca começou (0 turnos)" if snap["unstarted"] else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
+            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "o agente do painel é %s, não Pi" % snap["agent"] if snap["not_pi"] else "o painel abriu mas o Pi nunca começou (0 turnos)" if snap["unstarted"] else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
             out.append("- **%s** [%s] %s" % (m["name"], m["repo"], why))
         out.append("")
     out.append("## Onde você parou em cada projeto")
@@ -613,6 +642,8 @@ def cmd_close(a):
     snap = snapshot(meta, True)
     if not snap["merged"] and not a.force:
         raise Fail("close", "branch %s is not merged into %s; merge it first or pass --force to drop the worktree anyway" % (meta["branch"], meta["base"]))
+    meta["closing"] = now()  # before the pane goes: the watcher must not report a pane the chief itself closes
+    write_meta(meta)
     notes = []
     if meta.get("pane"):
         try:
@@ -670,6 +701,8 @@ def describe(event):
     text = {"turn_ended": "terminou um turno", "gone": "o painel fechou",
             "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais",
             "never_started": "o painel abriu mas o Pi nunca começou (0 turnos)"}
+    if event["kind"] == "not_pi":
+        return "%s: o agente do painel agora é %s, não Pi (o restore do Herdr reabriu o painel; o contexto do worker se perdeu)" % (event["worker"], event.get("agent"))
     if event["kind"] == "decision_needed":
         return "%s precisa de uma decisão do dono (%s)" % (event["worker"], event.get("id"))
     return "%s: %s" % (event["worker"], text.get(event["kind"], event["kind"]))
@@ -740,7 +773,7 @@ def cmd_watch(a):
             new = []
             if snap["turns"] > old["turns"]:
                 new.append(emit("turn_ended", name, turns=snap["turns"]))
-            if snap["state"] == "gone" and old["state"] != "gone":
+            if snap["state"] == "gone" and old["state"] != "gone" and not read_meta(name).get("closing"):
                 new.append(emit("gone", name))
             if snap["report"] and not old["report"]:
                 new.append(emit("report_written", name, report=meta["report"]))
@@ -748,6 +781,8 @@ def cmd_watch(a):
                 new.append(emit("merged", name, branch=meta["branch"]))
             if snap["stalled"] and not old["stalled"]:
                 new.append(emit("stalled", name, minutes=a.stall))
+            if snap["not_pi"] and not old["not_pi"]:
+                new.append(emit("not_pi", name, agent=snap["agent"]))
             if snap["unstarted"] and not old["unstarted"]:
                 new.append(emit("never_started", name, minutes=a.unstarted))
             write_text(seen_file, json.dumps(snap))
