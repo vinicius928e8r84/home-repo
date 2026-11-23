@@ -637,6 +637,31 @@ def cmd_read(a):
     return dict(ok=True, worker=meta["name"], state=worker_state(meta), output=text)
 
 
+def drop_folder(meta, notes):
+    """`close --force` after git gave up on the worktree (already unregistered, or a folder something holds open):
+    forget git's record and delete the folder, but only a folder inside ~/worktrees. A leftover only adds a note."""
+    path, root = os.path.abspath(meta["worktree"]), os.path.abspath(os.path.join(os.path.expanduser("~"), "worktrees"))
+    try:
+        inside = path != root and os.path.commonpath([path, root]) == root
+    except ValueError:
+        inside = False
+    if not inside:
+        notes.append("pasta %s fica onde está: fora de %s" % (posix(path), posix(root)))
+        return
+    subprocess.run(["git", "-C", meta["repo_path"], "worktree", "prune"], capture_output=True)
+
+    def writable(func, target, _exc):
+        os.chmod(target, 0o700)
+        func(target)
+
+    try:
+        shutil.rmtree(path, onerror=writable)
+    except OSError:
+        pass
+    if os.path.exists(path):
+        notes.append("pasta %s presa (algo a mantém aberta): apague à mão" % posix(path))
+
+
 def cmd_close(a):
     meta = read_meta(a.name)
     snap = snapshot(meta, True)
@@ -652,7 +677,13 @@ def cmd_close(a):
             notes.append("pane: " + e.error)
     if os.path.isdir(meta["worktree"]):
         cmd = ["git", "-C", meta["repo_path"], "worktree", "remove", meta["worktree"]] + (["--force"] if a.force else [])
-        run("worktree", cmd)
+        try:
+            run("worktree", cmd)
+        except Fail as e:
+            if not a.force:
+                raise
+            notes.append("worktree: " + e.error)
+            drop_folder(meta, notes)
     meta["closed"] = now()
     write_meta(meta)
     emit("closed", meta["name"], merged=snap["merged"])
@@ -843,7 +874,7 @@ def main():
     s.set_defaults(fn=cmd_read)
     s = sub.add_parser("close", help="close the pane and remove the worktree of a merged worker")
     s.add_argument("name")
-    s.add_argument("--force", action="store_true", help="close an unmerged worker; its branch is kept")
+    s.add_argument("--force", action="store_true", help="close an unmerged worker, or one whose worktree git cannot remove (the folder is deleted if it is inside ~/worktrees); its branch is kept")
     s.set_defaults(fn=cmd_close)
     s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls and closed panes, and tells the chief. spawn starts it")
     s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")

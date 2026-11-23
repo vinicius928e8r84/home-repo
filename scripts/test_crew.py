@@ -364,7 +364,10 @@ class CloseForce(CrewCase):
 
     def test_force_closes_even_when_the_folder_cannot_be_removed(self):
         meta = self.stuck_worker()
-        self.crew.shutil = types.SimpleNamespace(which=shutil.which, rmtree=lambda *a, **k: None)
+        def held_open(*args, **kwargs):
+            raise PermissionError("in use by another process")
+
+        self.crew.shutil = types.SimpleNamespace(which=shutil.which, rmtree=held_open)
         result = self.close()
         self.assertTrue(self.crew.read_meta("t-job").get("closed"))
         self.assertTrue(any(meta["worktree"] in n or "pasta" in n for n in result["notes"]), result["notes"])
