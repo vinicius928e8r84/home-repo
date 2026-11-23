@@ -1,0 +1,11 @@
+{
+  "default": "implement",
+  "routes": {
+    "orchestrate": { "model": "anthropic/claude-opus-5-5",   "thinking": "high" },
+    "plan":        { "model": "anthropic/claude-opus-5-5",   "thinking": "high" },
+    "implement":   { "model": "anthropic/claude-sonnet-5-5", "thinking": "medium" },
+    "review":      { "model": "anthropic/claude-opus-5-5",   "thinking": "high" },
+    "merge":       { "model": "anthropic/claude-sonnet-5-5", "thinking": "low" },
+    "research":    { "model": "anthropic/claude-haiku-5-5",  "thinking": "low" }
+  }
+}
