@@ -156,7 +156,7 @@ O vigia roda o `gc` sem `--apply` uma vez por dia e manda o resumo ao chief; com
 
 ### Teto de workers simultâneos
 
-O `spawn` confere o que há antes de abrir: número de workers abertos no host, RAM livre e disco livre. Acima do teto, o pedido entra numa fila (`state/crew/queue.jsonl`) e o vigia o abre quando sobrar espaço, avisando o chief. Os tetos ficam num arquivo de configuração (`fleet.json`), um por host. Hoje, com 43 workers abertos e 1,2 GB de RAM livre, o PC já está acima de qualquer teto razoável.
+O `spawn` confere o que há antes de abrir: número de workers abertos no host, RAM livre e disco livre. Acima do teto, o pedido entra numa fila (`state/crew/queue.jsonl`) e o vigia o abre quando sobrar espaço, avisando o chief. Os tetos ficam em `fleet.json`, um por host: 10 no PC e 6 na VPS (D43). Hoje, com 43 workers abertos e 1,2 GB de RAM livre, o PC já está acima de qualquer teto razoável.
 
 ## 4. A VPS como lugar durável
 
