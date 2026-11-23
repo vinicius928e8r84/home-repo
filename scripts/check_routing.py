@@ -1,8 +1,3 @@
-"""Check model_routing.json against the models this machine's Pi can reach.
-
-Usage: python -I scripts/check_routing.py
-Exit 0 when every route names a model Pi lists and a valid thinking level; 1 otherwise.
-"""
 import json
 import os
 import shutil

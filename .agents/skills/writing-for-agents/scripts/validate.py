@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""validate.py <skill dir>...  check a skill before calling it done.
-
-Errors (exit 1): missing or malformed frontmatter, name not equal to the folder or not kebab-case,
-description missing or over 1024 characters, a relative file the skill points at that does not exist,
-a cited skill path (~/.agents/skills/<name>/..., ~/.pi/agent/skills/<name>/...) that does not resolve.
-Warnings (exit 0): tools and paths this fleet does not have (Task or Skill tool, AskQuestion, ~/.cursor,
-/tmp/apiw), a SKILL.md over 500 lines, a reference file over 300 lines without a table of contents.
-"""
 import os, re, sys
 
 KEBAB = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
@@ -20,6 +12,15 @@ GONE = [
 SKILL_PATH = re.compile(r'(?:~|\$HOME|/home/[\w.-]+)/(?:\.agents/skills|\.pi/agent/skills)/([\w.-]+)(/[\w./-]*)?')
 REL_LINK = re.compile(r'\]\((?!https?:|#|mailto:)([^)\s#]+)')
 REL_TICK = re.compile(r'`((?:references|scripts|assets|agents)/[\w./-]+)`')
+
+USO = """validate.py <skill dir>...  check a skill before calling it done.
+
+Errors (exit 1): missing or malformed frontmatter, name not equal to the folder or not kebab-case,
+description missing or over 1024 characters, a relative file the skill points at that does not exist,
+a cited skill path (~/.agents/skills/<name>/..., ~/.pi/agent/skills/<name>/...) that does not resolve.
+Warnings (exit 0): tools and paths this fleet does not have (Task or Skill tool, AskQuestion, ~/.cursor,
+/tmp/apiw), a SKILL.md over 500 lines, a reference file over 300 lines without a table of contents.
+"""
 
 
 def frontmatter(text):
@@ -146,7 +147,7 @@ def check(d):
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit(__doc__)
+        sys.exit(USO)
     bad = 0
     for d in sys.argv[1:]:
         errs, warns = check(d)

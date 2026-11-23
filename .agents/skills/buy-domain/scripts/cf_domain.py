@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Cloudflare Registrar and DNS helper for the buy-domain skill. Standard library only.
+import json, os, subprocess, sys, urllib.request, urllib.error, urllib.parse
+
+ENV = os.path.expanduser("~/.config/firstmate-secrets/cloudflare.env")
+API = "https://api.cloudflare.com/client/v4"
+
+USO = """Cloudflare Registrar and DNS helper for the buy-domain skill. Standard library only.
 
   cf_domain.py search "<words>"            candidate names with cached prices (discovery only)
   cf_domain.py check <domain>...           live availability and price (the price to show the captain)
@@ -11,10 +16,6 @@
 
 Token: CF_API_TOKEN in ~/.config/firstmate-secrets/cloudflare.env (mode 600), never printed.
 """
-import json, os, subprocess, sys, urllib.request, urllib.error, urllib.parse
-
-ENV = os.path.expanduser("~/.config/firstmate-secrets/cloudflare.env")
-API = "https://api.cloudflare.com/client/v4"
 
 
 def token():
@@ -154,9 +155,9 @@ COMMANDS = {"search": cmd_search, "check": cmd_check, "buy": cmd_buy, "status": 
 
 def main(a):
     if len(a) < 2:
-        sys.exit(__doc__)
+        sys.exit(USO)
     if a[0] not in COMMANDS:
-        sys.exit(__doc__)
+        sys.exit(USO)
     COMMANDS[a[0]](a)
 
 

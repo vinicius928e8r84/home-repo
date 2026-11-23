@@ -1,10 +1,3 @@
-"""Small aaPanel file API client for registered VPS profiles.
-
-Profiles provide a full login URL, username, password source, and an explicitly
-accepted SHA-256 TLS certificate fingerprint. The client never disables server
-identity verification without pinning that accepted fingerprint.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -74,8 +67,6 @@ class _FingerprintAdapter(HTTPAdapter):
 
 
 class AaPanel:
-    """Authenticated aaPanel file API session."""
-
     def __init__(
         self,
         base_url: str,
@@ -115,11 +106,6 @@ class AaPanel:
 
     @staticmethod
     def fetch_fingerprint(url: str, timeout: float = 10) -> str:
-        """Return the currently presented certificate fingerprint for inspection.
-
-        This is discovery, not verification. The caller must confirm the value
-        through an independent trusted view before storing it in a profile.
-        """
         parsed = urlsplit(url)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("URL must be https and include a hostname")
