@@ -38,7 +38,7 @@ DECISIONS = os.path.join(STATE, "decisions.jsonl")
 NOTIFIED = os.path.join(STATE, "notify.cursor")
 NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started", "not_pi"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
-UNSTARTED_MINUTES = 4  # a worker idle with 0 turns for this long never started (spawn itself waits at most ~2.5 min)
+UNSTARTED_MINUTES = 4
 
 
 class Fail(Exception):
@@ -146,7 +146,6 @@ def find(obj, keys, allowed=None):
 
 
 def pane_info(pane):
-    """What Herdr says about the pane (agent included), {} when it says nothing useful, None when the pane is gone."""
     try:
         reply = herdr("pane", "pane", "get", pane)
     except Fail:
@@ -303,8 +302,6 @@ Escreva para quem não acompanhou o trabalho: frases completas, sem siglas que v
 
 
 def deliver_brief(meta, pane, wait, tries=3):
-    """Send the first message and wait for Pi to start the turn; Herdr sometimes drops it. Retry 2 only presses Enter
-    (the text may be typed already), retry 3 types it again."""
     for attempt in range(tries):
         if attempt == 1:
             herdr("prompt", "pane", "send-keys", pane, "enter")
@@ -403,15 +400,13 @@ def minutes_since(stamp):
     return (datetime.datetime.now(then.tzinfo) - then).total_seconds() / 60
 
 
-OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")  # a rebase logs only "rebase (finish)" on the branch (its picks go to the HEAD reflog); the original "commit:" entry survives it
+OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")
 
 
 def has_own_commit(meta):
-    """Did the worker commit on its branch? A branch that only moved along with the base (a fast-forward) has no
-    commit of its own, and "its head is in the base" would call that a merge. The branch's reflog tells the two apart."""
     out = subprocess.run(["git", "-C", meta["repo_path"], "log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
     entries = out.stdout.splitlines() if out.returncode == 0 else []
-    return not entries or any(e.startswith(OWN_COMMIT) for e in entries)  # no reflog (expired, bare): fall back to the head test
+    return not entries or any(e.startswith(OWN_COMMIT) for e in entries)
 
 
 def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
@@ -638,8 +633,6 @@ def cmd_read(a):
 
 
 def drop_folder(meta, notes):
-    """`close --force` after git gave up on the worktree (already unregistered, or a folder something holds open):
-    delete the folder and then forget git's record, but only a folder inside ~/worktrees. A leftover only adds a note."""
     path, root = os.path.abspath(meta["worktree"]), os.path.abspath(os.path.join(os.path.expanduser("~"), "worktrees"))
     try:
         inside = path != root and os.path.commonpath([path, root]) == root
@@ -657,7 +650,6 @@ def drop_folder(meta, notes):
         shutil.rmtree(path, onerror=writable)
     except OSError:
         pass
-    # prune only now: while the folder exists git still counts the worktree as live and keeps its record
     subprocess.run(["git", "-C", meta["repo_path"], "worktree", "prune"], capture_output=True)
     if os.path.exists(path):
         notes.append("pasta %s presa (algo a mantém aberta): apague à mão" % posix(path))
@@ -668,7 +660,7 @@ def cmd_close(a):
     snap = snapshot(meta, True)
     if not snap["merged"] and not a.force:
         raise Fail("close", "branch %s is not merged into %s; merge it first or pass --force to drop the worktree anyway" % (meta["branch"], meta["base"]))
-    meta["closing"] = now()  # before the pane goes: the watcher must not report a pane the chief itself closes
+    meta["closing"] = now()
     write_meta(meta)
     notes = []
     if meta.get("pane"):
@@ -700,7 +692,6 @@ def file_text(path):
 
 
 def write_text(path, text):
-    """Replace the file in one step: a watcher killed mid-write must not leave a cut-short cursor behind."""
     tmp = "%s.%d.tmp" % (path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(text)
@@ -715,13 +706,11 @@ def read_events():
                 try:
                     out.append(json.loads(line))
                 except ValueError:
-                    out.append(None)  # a half-written line still counts as a line, so the cursor keeps its place
+                    out.append(None)
     return out
 
 
 def notice_cursor(total):
-    """How many events the chief was already told about. Missing, empty or past the end of the log means "all of them":
-    a lost cursor must not replay the whole history to the chief."""
     raw = file_text(NOTIFIED)
     if not raw.isdigit() or int(raw) > total:
         write_text(NOTIFIED, str(total))
@@ -758,7 +747,6 @@ def start_watcher(chief, every=20, stall=20):
 
 
 def notify(chief):
-    """Tell the chief what happened since the last notice, once; what it was already told is never repeated."""
     events = read_events()
     told = notice_cursor(len(events))
     news = [e for e in events[told:] if e and e["kind"] in NOTIFY]
@@ -781,7 +769,7 @@ def cmd_watch(a):
     chief = a.chief
     herdr("herdr", "pane", "get", chief)
     loops, quiet_since = 0, time.time()
-    notice_cursor(len(read_events()))  # a first run starts from now, before this loop's own events
+    notice_cursor(len(read_events()))
     print(json.dumps(dict(ok=True, watching=True, chief=chief, every=a.every, stall_minutes=a.stall)), flush=True)
     while True:
         os.makedirs(STATE, exist_ok=True)

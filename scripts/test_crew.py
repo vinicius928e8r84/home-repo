@@ -1,7 +1,3 @@
-"""Tests for scripts/crew.py: the watcher, spawn and close, against a fake Herdr and real git repos.
-
-Run: python -I scripts/test_crew.py
-"""
 import contextlib
 import datetime
 import importlib.util
@@ -10,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import types
 import unittest
@@ -31,7 +26,6 @@ def minutes_ago(n):
 
 
 class Clock:
-    """time.time() and time.sleep() that never really wait."""
 
     def __init__(self):
         self.now = 1_000_000.0
@@ -44,61 +38,81 @@ class Clock:
 
 
 class FakeHerdr:
-    """Just enough of the Herdr CLI: panes that live and die, an agent per pane, typed text that Enter submits."""
-
     def __init__(self, crew, state_dir):
         self.crew, self.state_dir = crew, state_dir
         self.panes = {CHIEF: dict(alive=True, agent="pi")}
-        self.sent = {}  # pane -> texts that were submitted
+        self.sent = {}
         self.typed = {}
-        self.drop_texts = 0  # the next N send-text calls are lost, like the first message of a spawn
+        self.drop_texts = 0
         self.on_close = None
         self.state_files = {}
         self.calls = []
         self.next_pane = 0
+        self.handlers = {
+            ("pane", "get"): self.pane_get,
+            ("pane", "close"): self.pane_close,
+            ("workspace", "list"): self.workspace_list,
+            ("tab", "create"): self.tab_create,
+            ("pane", "run"): self.pane_run,
+            ("pane", "send-text"): self.pane_send_text,
+            ("pane", "send-keys"): self.pane_send_keys,
+            ("pane", "read"): self.pane_read,
+        }
 
     def __call__(self, step, *args):
-        """`args` are the Herdr CLI arguments, as crew.herdr() receives them."""
         self.calls.append(args)
-        if args[:2] == ("pane", "get"):
-            pane = self.panes.get(args[2])
-            if not pane or not pane["alive"]:
-                raise self.crew.Fail(step, "pane %s not found" % args[2])
-            return {"result": {"pane": dict(pane_id=args[2], agent=pane["agent"])}}
-        if args[:2] == ("pane", "close"):
-            self.panes[args[2]]["alive"] = False
-            if self.on_close:
-                self.on_close()
-            return {}
-        if args[:2] == ("workspace", "list"):
-            return {"result": {"workspaces": [{"label": "crew", "workspace_id": "w9"}]}}
-        if args[:2] == ("tab", "create"):
-            self.next_pane += 1
-            pane = "w9:p%d" % self.next_pane
-            self.panes[pane] = dict(alive=True, agent=None)
-            env = [args[i + 1] for i, v in enumerate(args) if v == "--env"]
-            self.state_files[pane] = [e.split("=", 1)[1] for e in env if e.startswith("CREW_STATE_FILE=")][0]
-            return {"result": {"pane": {"pane_id": pane}}}
-        if args[:2] == ("pane", "run"):
-            self.panes[args[2]]["agent"] = "pi"
-            self.write_state(args[2], "idle", 0)
-            return {}
-        if args[:2] == ("pane", "send-text"):
-            if self.drop_texts > 0:
-                self.drop_texts -= 1
-            else:
-                self.typed[args[2]] = self.typed.get(args[2], "") + args[3]
-            return {}
-        if args[:2] == ("pane", "send-keys") and args[3] == "enter":
-            text = self.typed.pop(args[2], "")
-            if text:
-                self.sent.setdefault(args[2], []).append(text)
-                if args[2] in self.state_files:
-                    self.write_state(args[2], "working", 0)
-            return {}
-        if args[:2] == ("pane", "read"):
-            return "screen"
-        raise AssertionError("the fake Herdr does not know %r" % (args,))
+        handler = self.handlers.get(args[:2])
+        if handler is None:
+            raise AssertionError("the fake Herdr does not know %r" % (args,))
+        return handler(step, *args)
+
+    def pane_get(self, step, *args):
+        pane = self.panes.get(args[2])
+        if not pane or not pane["alive"]:
+            raise self.crew.Fail(step, "pane %s not found" % args[2])
+        return {"result": {"pane": dict(pane_id=args[2], agent=pane["agent"])}}
+
+    def pane_close(self, step, *args):
+        self.panes[args[2]]["alive"] = False
+        if self.on_close:
+            self.on_close()
+        return {}
+
+    def workspace_list(self, step, *args):
+        return {"result": {"workspaces": [{"label": "crew", "workspace_id": "w9"}]}}
+
+    def tab_create(self, step, *args):
+        self.next_pane += 1
+        pane = "w9:p%d" % self.next_pane
+        self.panes[pane] = dict(alive=True, agent=None)
+        env = [args[i + 1] for i, v in enumerate(args) if v == "--env"]
+        self.state_files[pane] = [e.split("=", 1)[1] for e in env if e.startswith("CREW_STATE_FILE=")][0]
+        return {"result": {"pane": {"pane_id": pane}}}
+
+    def pane_run(self, step, *args):
+        self.panes[args[2]]["agent"] = "pi"
+        self.write_state(args[2], "idle", 0)
+        return {}
+
+    def pane_send_text(self, step, *args):
+        if self.drop_texts > 0:
+            self.drop_texts -= 1
+        else:
+            self.typed[args[2]] = self.typed.get(args[2], "") + args[3]
+        return {}
+
+    def pane_send_keys(self, step, *args):
+        if args[3] != "enter":
+            raise AssertionError("the fake Herdr does not know %r" % (args,))
+        text = self.typed.pop(args[2], "")
+        if text:
+            self.sent.setdefault(args[2], []).append(text)
+            if args[2] in self.state_files:
+                self.write_state(args[2], "working", 0)
+        return {}
+
+    def pane_read(self, step, *args):
+        return "screen"
 
     def write_state(self, pane, state, turns):
         with open(self.state_files[pane], "w", encoding="utf-8") as f:
@@ -154,20 +168,27 @@ class CrewCase(unittest.TestCase):
         with open(path, "w") as f:
             json.dump(dict(state=state), f)
 
-    def add_worker(self, name="t-job", pane="w4:p1", state="working", turns=1, started=None, at=None, agent="pi", **meta_extra):
+    def worker_meta(self, name, pane, fields):
         folder = os.path.join(self.state, name)
-        os.makedirs(folder, exist_ok=True)
         meta = dict(name=name, repo="Test", repo_path=self.repo.replace("\\", "/"), task="job", type="implement", model="x/y", thinking="high",
                     worktree=os.path.join(self.home, "worktrees", "Test-job").replace("\\", "/"), branch="pi/job", base="origin/main",
                     base_sha=git(self.repo, "rev-parse", "HEAD"), brief=folder + "/brief.md", report=folder + "/report.md",
-                    state_file=(folder + "/state.json").replace("\\", "/"), started=started or minutes_ago(30), pane=pane)
-        meta.update(meta_extra)
-        with open(os.path.join(folder, "meta.json"), "w") as f:
+                    state_file=(folder + "/state.json").replace("\\", "/"), started=minutes_ago(30), pane=pane)
+        meta.update(fields)
+        return meta
+
+    def add_worker(self, name="t-job", pane="w4:p1", agent="pi", **fields):
+        turn = dict(state="working", turns=1, at=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        for key in turn:
+            turn[key] = fields.pop(key, turn[key])
+        meta = self.worker_meta(name, pane, fields)
+        os.makedirs(os.path.join(self.state, name), exist_ok=True)
+        with open(os.path.join(self.state, name, "meta.json"), "w") as f:
             json.dump(meta, f)
         self.herdr.panes[pane] = dict(alive=True, agent=agent)
         self.herdr.state_files[pane] = meta["state_file"]
         with open(meta["state_file"], "w") as f:
-            json.dump(dict(state=state, turns=turns, at=at or datetime.datetime.now(datetime.timezone.utc).isoformat()), f)
+            json.dump(turn, f)
         return meta
 
     def events(self):
@@ -193,7 +214,6 @@ class CrewCase(unittest.TestCase):
 
 
 class WatcherHistory(CrewCase):
-    """Furo 1: a restarted watcher only announces what is new."""
 
     def old_decisions(self):
         self.add_events([dict(kind="decision_needed", id="D%d" % n, question="q") for n in range(1, 16)])
@@ -224,7 +244,6 @@ class WatcherHistory(CrewCase):
 
 
 class SpawnDelivery(CrewCase):
-    """Furo 2: spawn checks that the first message arrived; the watcher flags a worker that never started."""
 
     def spawn(self):
         args = types.SimpleNamespace(repo="Test", task="job", type=None, model=None, request="do it", request_file=None, done="done",
@@ -264,11 +283,10 @@ class SpawnDelivery(CrewCase):
 
 
 class CloseIsSilent(CrewCase):
-    """Furo 3: a pane the chief closed is not a pane that died."""
 
     def test_close_does_not_become_a_gone_notice(self):
         self.add_worker()
-        self.herdr.on_close = self.watch  # the watcher polls exactly while `close` is still working
+        self.herdr.on_close = self.watch
         with contextlib.redirect_stdout(io.StringIO()):
             self.crew.cmd_close(types.SimpleNamespace(name="t-job", force=True))
         kinds = [e["kind"] for e in self.events()]
@@ -283,7 +301,6 @@ class CloseIsSilent(CrewCase):
 
 
 class AgentIsPi(CrewCase):
-    """Furo 4: a worker whose pane now runs another agent is flagged."""
 
     def test_flags_a_worker_the_restore_reopened_as_claude(self):
         self.add_worker(agent="claude")
@@ -313,7 +330,6 @@ class AgentIsPi(CrewCase):
 
 
 class OpenDecisionIsNotStalled(CrewCase):
-    """Furo 5: a worker waiting for the owner's answer is not stuck."""
 
     def stalled(self, meta):
         return self.crew.snapshot(meta, False, 20)["stalled"]
@@ -349,11 +365,10 @@ class OpenDecisionIsNotStalled(CrewCase):
 
 
 class CloseForce(CrewCase):
-    """Furo 6: `close --force` closes a worker whose worktree is half removed."""
 
     def stuck_worker(self):
         meta = self.add_worker()
-        os.makedirs(meta["worktree"])  # a folder git no longer knows: `git worktree remove` refuses it
+        os.makedirs(meta["worktree"])
         with open(os.path.join(meta["worktree"], "left-over.txt"), "w") as f:
             f.write("x")
         return meta
@@ -380,8 +395,6 @@ class CloseForce(CrewCase):
         self.assertTrue(any(meta["worktree"] in n or "pasta" in n for n in result["notes"]), result["notes"])
 
     def test_force_leaves_no_ghost_registration_for_a_worktree_git_knows(self):
-        """git still lists the worktree when the folder goes: pruning before the delete leaves a `prunable` ghost,
-        and the next `git worktree add` on the same branch fails with "already used by worktree"."""
         meta = self.add_worker()
         git(self.repo, "worktree", "add", "-q", "-b", meta["branch"], meta["worktree"], "origin/main")
         self.assertIn("worktrees/Test-job", git(self.repo, "worktree", "list", "--porcelain").replace("\\", "/"))
@@ -391,7 +404,7 @@ class CloseForce(CrewCase):
         listing = git(self.repo, "worktree", "list", "--porcelain")
         self.assertNotIn("prunable", listing)
         self.assertNotIn("Test-job", listing.replace("\\", "/"))
-        git(self.repo, "worktree", "add", "-q", meta["worktree"], meta["branch"])  # the branch is free again
+        git(self.repo, "worktree", "add", "-q", meta["worktree"], meta["branch"])
 
     def test_force_never_deletes_a_folder_outside_the_worktrees_directory(self):
         outside = os.path.join(self.tmp, "precious")
@@ -404,7 +417,6 @@ class CloseForce(CrewCase):
 
 
 class MergedNeedsOwnCommit(CrewCase):
-    """Furo 7: a branch that only moved along with main is not a merged branch."""
 
     def worktree(self, branch):
         path = os.path.join(self.tmp, "wt-" + branch)
