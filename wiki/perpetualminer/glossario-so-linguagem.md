@@ -30,3 +30,11 @@ Relacionada: [campanha da nota 10](campanha-nota-10.md). Nenhuma mudança de com
 
 - Os dois arquivos foram para `docs/` pelo próprio dono no commit `vinicius928e8r84/PerpetualMiner@fbdcee51` (19/11). Esse commit também criou `scripts/ci/test_docs_fora_da_raiz.js`, que reprova se os arquivos estiverem na raiz. A mensagem do commit não dá o motivo. Pergunta Q15 da rodada 3.
 - O inventário dos `.md` foi feito pelo worker `pm-docs-inventario` (relatório em `state/crew/pm-docs-inventario/report.md`; inventário em `pi/docs-inventario@cc92a1ca`, `docs-inventario.md`). Ver [dieta dos .md](dieta-dos-md.md).
+
+## Decidido em 2026-11-23, rodada 3 (o dono confirmou a lista inteira)
+
+- `glossary.md` e `CODING_STANDARDS.md` voltam para a raiz, e `scripts/ci/test_docs_fora_da_raiz.js` é apagado. A volta desfaz `fbdcee51`.
+- Relações: `Fonte → Minerar → Frase (no Histórico) → Enviar ao Anki → Envio (um por Idioma) → Cartão (um por Termo) → Baralho`.
+- As Ambiguidades resolvidas que ficam: cartão (só o item do Anki), termo e palavra, nível, estilo e sub-baralho, e trecho (não é Frase; é Marcação até ser minerado). A de "grupo" sai.
+- Execução: uma PR feita por um worker, já, em paralelo aos lotes da campanha. O mesmo worker abre as issues (textos de tela com o nome velho, o .txt da Exportada e uma por conceito a renomear no código), marcadas para depois da campanha.
+- Merge: o chief deixa a PR verde e revisada e avisa, e o dono mescla.
