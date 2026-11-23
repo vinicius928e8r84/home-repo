@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from scripts.freios import registrar_na_pr
-from scripts.freios.registro_da_pr import conferir
+from scripts.freios.registro_da_pr import Pr, conferir
 from scripts.freios.registrar_na_pr import corpo_com_a_prova, ler_argumentos, secao_da_prova
 from scripts.freios.test_registro_da_pr import FECHA, HEAD, OUTRO, REPO, prova, revisao
 
@@ -121,8 +121,6 @@ class Revisao(unittest.TestCase):
 
 
 def conferir_com(registro):
-    from registro_da_pr import Pr
-
     return conferir(Pr(corpo=CORPO, head=HEAD, registros=[registro], autor="dono", repositorio=REPO))
 
 
