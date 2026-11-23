@@ -158,75 +158,118 @@ function bounce(tick, span) {
   return { position: moves <= span ? moves : span * 2 - moves, direction: moves < span ? 1 : -1 };
 }
 
-// 11. The robot rides a river of bits, eats the $ in its way, sweats, sparks, blinks and trips on a bug.
-function robotScene(tick) {
-  const [top, base] = canvas();
-  const { position, direction } = bounce(tick, WIDTH - 5);
+function paintBits(base, tick) {
   const flow = Math.floor(tick / 2);
   for (let column = 0; column < WIDTH; column += 1) {
     const gap = (column + flow) % 4 === 0;
     base[column] = [gap ? " " : "01"[(column * 31 + flow) & 1], C.green];
   }
-  const passed = (column) => (direction === 1 ? column < position : column > position + 4);
-  const coins = [];
-  for (let column = 8; column < WIDTH - 2; column += 11) coins.push(column);
-  for (const column of coins) put(base, column, passed(column) ? "·" : "$", passed(column) ? C.gray : C.yellow);
-  const bug = Math.floor(WIDTH / 2) - 4;
-  put(base, bug, "ж", C.red);
+}
 
-  const front = direction === 1 ? position + 5 : position - 1;
-  const coinAhead = coins.some((column) => !passed(column) && Math.abs(column - front) <= 2);
-  const onBug = bug >= position && bug <= position + 4;
-  const justAfterBug = direction === 1 ? position - bug : bug - (position + 4);
+function paintCoins(base, coins, passed) {
+  for (const column of coins) put(base, column, passed(column) ? "·" : "$", passed(column) ? C.gray : C.yellow);
+}
+
+function robotExpression(tick, coinAhead, afterBug, onBug) {
   let face = "[o_o]";
   let speech = tick % 2 ? "*┬*" : "·┬·";
   if (tick % 23 === 0) face = "[-_-]";
   if (tick % 61 < 6) speech = "brr";
   if (coinAhead) [face, speech] = ["[$_$]", "$$$"];
-  if (justAfterBug >= 1 && justAfterBug <= 2) [face, speech] = ["[>_<]", "ops"];
+  if (afterBug) [face, speech] = ["[>_<]", "ops"];
   if (onBug) [face, speech] = ["[x_x]", "404"];
-  put(base, position, face, onBug ? C.red : C.cyan);
-  put(top, position + 1, speech, onBug ? C.red : coinAhead ? C.yellow : C.cyan);
+  return { face, speech };
+}
 
-  // Sweat flying off the head, behind the robot.
+function paintSweat(top, tick, position, direction) {
   ["'", "°", "·"].forEach((drop, index) => {
     if ((tick + index) % 3 === 0) return;
     const column = direction === 1 ? position - index : position + 4 + index;
     put(top, column, drop, C.blue);
   });
+}
+
+function robotSituation(position, direction, coins, passed) {
+  const bug = Math.floor(WIDTH / 2) - 4;
+  const front = direction === 1 ? position + 5 : position - 1;
+  const justAfterBug = direction === 1 ? position - bug : bug - (position + 4);
+  return {
+    bug,
+    coinAhead: coins.some((column) => !passed(column) && Math.abs(column - front) <= 2),
+    onBug: bug >= position && bug <= position + 4,
+    afterBug: justAfterBug >= 1 && justAfterBug <= 2,
+  };
+}
+
+// 11. The robot rides a river of bits, eats the $ in its way, sweats, sparks, blinks and trips on a bug.
+function robotScene(tick) {
+  const [top, base] = canvas();
+  const { position, direction } = bounce(tick, WIDTH - 5);
+  paintBits(base, tick);
+  const passed = (column) => (direction === 1 ? column < position : column > position + 4);
+  const coins = [];
+  for (let column = 8; column < WIDTH - 2; column += 11) coins.push(column);
+  paintCoins(base, coins, passed);
+  const { bug, coinAhead, onBug, afterBug } = robotSituation(position, direction, coins, passed);
+  put(base, bug, "ж", C.red);
+
+  const { face, speech } = robotExpression(tick, coinAhead, afterBug, onBug);
+  put(base, position, face, onBug ? C.red : C.cyan);
+  put(top, position + 1, speech, onBug ? C.red : coinAhead ? C.yellow : C.cyan);
+
+  // Sweat flying off the head, behind the robot.
+  paintSweat(top, tick, position, direction);
   return paint([top, base]);
+}
+
+function paintWaves(base, tick) {
+  for (let column = 0; column < WIDTH; column += 1) {
+    if ((column + Math.floor(tick / 3)) % 6 < 2) base[column] = ["~", C.cyan];
+  }
+}
+
+function adultLength(cycle, boosted) {
+  if (boosted) return 5;
+  if (cycle < 8) return 1;
+  if (cycle < 16) return 2;
+  return cycle < 28 ? 3 : 1;
+}
+
+function paintSpray(top, base, { cycle, tip, direction }) {
+  const spray = ["~", "~·", "~·°", " ·°'"][cycle - 24];
+  const text = direction === 1 ? spray : Array.from(spray).reverse().join("");
+  put(base, direction === 1 ? tip + 1 : tip - text.length, text, C.white);
+  put(top, direction === 1 ? tip + 1 : tip - 2, "!!", C.white);
+}
+
+function paintMood(top, start, cycle, boosted) {
+  if (cycle >= 28) put(top, start, "zzz", C.gray);
+  else if (boosted) put(top, start + 1, "!!!", C.blue);
+}
+
+function paintAdult(base, position, direction, length) {
+  const shaft = "=".repeat(length);
+  const start = direction === 1 ? position : position + 6 - (length + 1);
+  put(base, start, direction === 1 ? `8${shaft}D` : `C${shaft}8`, C.magenta);
+  return { start, tip: direction === 1 ? start + length + 1 : start };
 }
 
 // 12. Grows, fires, droops, and turns around at the edges; a blue pill on the way makes it longer.
 function adultScene(tick) {
   const [top, base] = canvas();
   const { position, direction } = bounce(tick, WIDTH - 8);
-  for (let column = 0; column < WIDTH; column += 1) {
-    if ((column + Math.floor(tick / 3)) % 6 < 2) base[column] = ["~", C.cyan];
-  }
+  paintWaves(base, tick);
   const pill = Math.floor(WIDTH / 2);
   const past = direction === 1 ? position - pill : pill - (position + 6);
   if (past < 0) put(base, pill, "o", C.blue);
   const boosted = past > 0 && past <= 7;
 
   const cycle = tick % 32;
-  const firing = cycle >= 24 && cycle < 28;
-  const length = boosted ? 5 : cycle < 8 ? 1 : cycle < 16 ? 2 : cycle < 28 ? 3 : 1;
-  const shaft = "=".repeat(length);
-  const start = direction === 1 ? position : position + 6 - (length + 1);
-  put(base, start, direction === 1 ? `8${shaft}D` : `C${shaft}8`, C.magenta);
-  const tip = direction === 1 ? start + length + 1 : start;
+  const length = adultLength(cycle, boosted);
+  const { start, tip } = paintAdult(base, position, direction, length);
 
-  if (firing) {
-    const spray = ["~", "~·", "~·°", " ·°'"][cycle - 24];
-    const text = direction === 1 ? spray : Array.from(spray).reverse().join("");
-    put(base, direction === 1 ? tip + 1 : tip - text.length, text, C.white);
-    put(top, direction === 1 ? tip + 1 : tip - 2, "!!", C.white);
-  } else if (cycle >= 28) {
-    put(top, start, "zzz", C.gray);
-  } else if (boosted) {
-    put(top, start + 1, "!!!", C.blue);
-  }
+  if (cycle >= 24 && cycle < 28) paintSpray(top, base, { cycle, tip, direction });
+  else paintMood(top, start, cycle, boosted);
   return paint([top, base]);
 }
 

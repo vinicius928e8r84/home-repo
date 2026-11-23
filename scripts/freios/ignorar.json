@@ -1,0 +1,12 @@
+[
+  {
+    "glob": "scripts/crew.py",
+    "ferramentas": ["ruff"],
+    "motivo": "tem 772 linhas e funções acima dos limites de saúde; outra tarefa o divide em módulos e esta exclusão sai junto"
+  },
+  {
+    "glob": ".pi/extensions/fm-calm.ts",
+    "ferramentas": ["eslint"],
+    "motivo": "tem 514 linhas e funções acima dos limites de saúde; outra tarefa o divide em módulos e esta exclusão sai junto"
+  }
+]

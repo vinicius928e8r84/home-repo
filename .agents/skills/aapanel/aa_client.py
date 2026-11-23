@@ -80,10 +80,10 @@ class AaPanel:
         self,
         base_url: str,
         entrance: str,
-        username: str,
-        password: str,
+        credentials: tuple[str, str],
         fingerprint: str,
     ):
+        username, password = credentials
         parsed = urlsplit(base_url)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("aaPanel base URL must be an https URL with a hostname")
@@ -136,10 +136,46 @@ class AaPanel:
         return cls(
             base,
             entrance,
-            os.environ[f"{prefix}_USER"],
-            os.environ[f"{prefix}_PWD"],
+            (os.environ[f"{prefix}_USER"], os.environ[f"{prefix}_PWD"]),
             os.environ[f"{prefix}_FINGERPRINT"],
         )
+
+    @staticmethod
+    def _password_from_env(env_name: object) -> str:
+        if not isinstance(env_name, str) or not env_name:
+            raise ValueError("password_env must name a non-empty environment variable")
+        try:
+            return os.environ[env_name]
+        except KeyError as error:
+            raise RuntimeError(f"required password environment variable is unset: {env_name}") from error
+
+    @staticmethod
+    def _password_from_file(file_name: str) -> str:
+        password_path = Path(file_name).expanduser()
+        if not password_path.is_absolute():
+            raise ValueError("password_file must be an absolute path")
+        if password_path.is_symlink() or not password_path.is_file():
+            raise PermissionError("password_file must be a regular non-symlink file")
+        mode = password_path.stat().st_mode & 0o777
+        if mode & 0o077:
+            raise PermissionError("password_file must have mode 0600")
+        password = password_path.read_text(encoding="utf-8")
+        if not password:
+            raise ValueError("password_file is empty")
+        return password
+
+    @classmethod
+    def _profile_password(cls, profile: dict, profile_path: Path) -> str:
+        if "password_env" in profile:
+            return cls._password_from_env(profile["password_env"])
+        if "password_file" in profile:
+            return cls._password_from_file(profile["password_file"])
+        if "pwd" in profile:
+            mode = profile_path.stat().st_mode & 0o777
+            if mode & 0o077:
+                raise PermissionError("profile containing pwd must have mode 0600")
+            return profile["pwd"]
+        raise ValueError("profile requires password_env, password_file, or pwd")
 
     @classmethod
     def from_config(cls, path: str | os.PathLike[str]) -> "AaPanel":
@@ -147,39 +183,12 @@ class AaPanel:
         profile = json.loads(profile_path.read_text(encoding="utf-8"))
         base, entrance = cls._split_login_url(profile["url"])
 
-        if "password_env" in profile:
-            env_name = profile["password_env"]
-            if not isinstance(env_name, str) or not env_name:
-                raise ValueError("password_env must name a non-empty environment variable")
-            try:
-                password = os.environ[env_name]
-            except KeyError as error:
-                raise RuntimeError(f"required password environment variable is unset: {env_name}") from error
-        elif "password_file" in profile:
-            password_path = Path(profile["password_file"]).expanduser()
-            if not password_path.is_absolute():
-                raise ValueError("password_file must be an absolute path")
-            if password_path.is_symlink() or not password_path.is_file():
-                raise PermissionError("password_file must be a regular non-symlink file")
-            mode = password_path.stat().st_mode & 0o777
-            if mode & 0o077:
-                raise PermissionError("password_file must have mode 0600")
-            password = password_path.read_text(encoding="utf-8")
-            if not password:
-                raise ValueError("password_file is empty")
-        elif "pwd" in profile:
-            mode = profile_path.stat().st_mode & 0o777
-            if mode & 0o077:
-                raise PermissionError("profile containing pwd must have mode 0600")
-            password = profile["pwd"]
-        else:
-            raise ValueError("profile requires password_env, password_file, or pwd")
+        password = cls._profile_password(profile, profile_path)
 
         return cls(
             base,
             entrance,
-            profile["user"],
-            password,
+            (profile["user"], password),
             profile["fingerprint"],
         )
 

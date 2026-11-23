@@ -66,6 +66,84 @@ function toRuns(row: Cell[]): CalmWorkingShipRun[] {
   return runs;
 }
 
+type Pose = { readonly position: number; readonly direction: number; readonly ticks: number };
+
+type Face = {
+  readonly face: string;
+  readonly speech: string;
+  readonly color: CalmWorkingShipColor;
+  readonly onBug: boolean;
+};
+
+const hasPassed = (pose: Pose, column: number): boolean =>
+  pose.direction === 1 ? column < pose.position : column > pose.position + ROBOT_WIDTH - 1;
+
+function coinColumns(width: number): number[] {
+  const coins: number[] = [];
+  for (let column = COIN_FIRST; column < width - 2; column += COIN_EVERY) coins.push(column);
+  return coins;
+}
+
+function paintCoins(base: Cell[], coins: number[], pose: Pose): void {
+  for (const column of coins) {
+    if (hasPassed(pose, column)) put(base, column, "·", "dim");
+    else put(base, column, "$", "coin");
+  }
+}
+
+function bugColumn(width: number, coins: number[]): number | null {
+  const bug = Math.floor(width / 2) - 4;
+  return bug > 0 && !coins.includes(bug) ? bug : null;
+}
+
+function isOnBug(pose: Pose, bug: number | null): boolean {
+  return bug !== null && bug >= pose.position && bug <= pose.position + ROBOT_WIDTH - 1;
+}
+
+function isLeavingBug(pose: Pose, bug: number | null): boolean {
+  if (bug === null) return false;
+  const pastBug = pose.direction === 1 ? pose.position - bug : bug - (pose.position + ROBOT_WIDTH - 1);
+  return pastBug >= 1 && pastBug <= 2;
+}
+
+function isCoinAhead(pose: Pose, coins: number[]): boolean {
+  const front = pose.direction === 1 ? pose.position + ROBOT_WIDTH : pose.position - 1;
+  return coins.some((column) => !hasPassed(pose, column) && Math.abs(column - front) <= 2);
+}
+
+function chooseFace(pose: Pose, coins: number[], bug: number | null): Face {
+  const onBug = isOnBug(pose, bug);
+  if (onBug) return { face: "[x_x]", speech: "404", color: "alert", onBug };
+  if (isLeavingBug(pose, bug)) return { face: "[>_<]", speech: "ops", color: "robot", onBug };
+  if (isCoinAhead(pose, coins)) return { face: "[$_$]", speech: "$$$", color: "coin", onBug };
+  return {
+    face: pose.ticks % 23 === 0 ? "[-_-]" : "[o_o]",
+    speech: pose.ticks % 61 < 6 ? "brr" : pose.ticks % 2 ? "*┬*" : "·┬·",
+    color: "robot",
+    onBug,
+  };
+}
+
+function paintSweat(top: Cell[], pose: Pose): void {
+  ["'", "°", "·"].forEach((drop, index) => {
+    if ((pose.ticks + index) % 3 === 0) return;
+    put(top, pose.direction === 1 ? pose.position - index : pose.position + ROBOT_WIDTH - 1 + index, drop, "sweat");
+  });
+}
+
+function paintScene(base: Cell[], top: Cell[], pose: Pose): void {
+  const coins = coinColumns(base.length);
+  paintCoins(base, coins, pose);
+  const bug = bugColumn(base.length, coins);
+  if (bug !== null) put(base, bug, "ж", "alert");
+  const look = chooseFace(pose, coins, bug);
+  put(base, pose.position, look.face, look.onBug ? "alert" : "robot");
+  put(top, pose.position + 1, look.speech, look.color);
+
+  // Sweat flying off the head, behind the robot.
+  paintSweat(top, pose);
+}
+
 export function createCalmWorkingShipSprite(): CalmWorkingShipSprite {
   let position = 0;
   let direction = 1;
@@ -125,40 +203,7 @@ export function createCalmWorkingShipSprite(): CalmWorkingShipSprite {
         return [toRuns(base)];
       }
       const top = blankRow(width);
-
-      const passed = (column: number): boolean =>
-        direction === 1 ? column < position : column > position + ROBOT_WIDTH - 1;
-      const coins: number[] = [];
-      for (let column = COIN_FIRST; column < width - 2; column += COIN_EVERY) coins.push(column);
-      for (const column of coins) {
-        if (passed(column)) put(base, column, "·", "dim");
-        else put(base, column, "$", "coin");
-      }
-      const bug = Math.floor(width / 2) - 4;
-      const hasBug = bug > 0 && !coins.includes(bug);
-      if (hasBug) put(base, bug, "ж", "alert");
-
-      const front = direction === 1 ? position + ROBOT_WIDTH : position - 1;
-      const coinAhead = coins.some((column) => !passed(column) && Math.abs(column - front) <= 2);
-      const onBug = hasBug && bug >= position && bug <= position + ROBOT_WIDTH - 1;
-      const pastBug = direction === 1 ? position - bug : bug - (position + ROBOT_WIDTH - 1);
-
-      let face = "[o_o]";
-      let speech = ticks % 2 ? "*┬*" : "·┬·";
-      let color: CalmWorkingShipColor = "robot";
-      if (ticks % 23 === 0) face = "[-_-]";
-      if (ticks % 61 < 6) speech = "brr";
-      if (coinAhead) [face, speech, color] = ["[$_$]", "$$$", "coin"];
-      if (hasBug && pastBug >= 1 && pastBug <= 2) [face, speech, color] = ["[>_<]", "ops", "robot"];
-      if (onBug) [face, speech, color] = ["[x_x]", "404", "alert"];
-      put(base, position, face, onBug ? "alert" : "robot");
-      put(top, position + 1, speech, color);
-
-      // Sweat flying off the head, behind the robot.
-      ["'", "°", "·"].forEach((drop, index) => {
-        if ((ticks + index) % 3 === 0) return;
-        put(top, direction === 1 ? position - index : position + ROBOT_WIDTH - 1 + index, drop, "sweat");
-      });
+      paintScene(base, top, { position, direction, ticks });
 
       rendered = { position, direction, span, ticks };
       return [toRuns(top), toRuns(base)];

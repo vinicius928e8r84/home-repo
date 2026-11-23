@@ -63,8 +63,7 @@ def pick_profile(want):
     return names[0]
 
 
-def buy(domain, confirmed):
-    it = cf.live_price(domain)
+def require_buyable(domain, it, confirmed):
     price = (it.get("pricing") or {}).get("registration_cost")
     if not it.get("registrable"):
         reason = it.get("reason", "unknown")
@@ -75,10 +74,10 @@ def buy(domain, confirmed):
         stop(3, "%s: the captain buys .shop on Hostinger (cheaper; Cloudflare asks US$%s), adds it to Cloudflare as a zone and sets the nameservers, then rerun." % (domain, price))
     if confirmed is None or float(price) != float(confirmed):
         stop(4, "%s is available: US$%s to register, US$%s per year to renew. Tell the captain the price and wait for his yes, then rerun with --confirm-price %s." % (domain, price, it["pricing"]["renewal_cost"], price))
-    s, d = cf.call("POST", "/accounts/%s/registrar/registrations" % cf.account(), {"domain_name": domain}, {"Prefer": "respond-async"})
-    if s not in (200, 201, 202):
-        stop(7, "purchase refused: %s" % json.dumps(d.get("errors")))
-    say("buy", "ordered %s for US$%s (renews US$%s)" % (domain, price, it["pricing"]["renewal_cost"]))
+    return price
+
+
+def wait_registration(domain):
     for _ in range(30):
         s, d = cf.call("GET", "/accounts/%s/registrar/registrations/%s/registration-status" % (cf.account(), domain))
         r = d.get("result") or {}
@@ -90,15 +89,29 @@ def buy(domain, confirmed):
     stop(7, "registration still in progress; never buy again, run: cf_domain.py status %s" % domain)
 
 
+def buy(domain, confirmed):
+    it = cf.live_price(domain)
+    price = require_buyable(domain, it, confirmed)
+    s, d = cf.call("POST", "/accounts/%s/registrar/registrations" % cf.account(), {"domain_name": domain}, {"Prefer": "respond-async"})
+    if s not in (200, 201, 202):
+        stop(7, "purchase refused: %s" % json.dumps(d.get("errors")))
+    say("buy", "ordered %s for US$%s (renews US$%s)" % (domain, price, it["pricing"]["renewal_cost"]))
+    wait_registration(domain)
+
+
+def zip_site(site_dir, zp):
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
+        for base, _, files in os.walk(site_dir):
+            for f in files:
+                full = os.path.join(base, f)
+                z.write(full, os.path.relpath(full, site_dir))
+
+
 def publish(p, h, domain, site_dir):
     root = "/www/wwwroot/" + domain
     if site_dir:
         zp = os.path.join(tempfile.mkdtemp(prefix="bd-"), "site.zip")
-        with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
-            for base, _, files in os.walk(site_dir):
-                for f in files:
-                    full = os.path.join(base, f)
-                    z.write(full, os.path.relpath(full, site_dir))
+        zip_site(site_dir, zp)
         p.upload_unzip(root, zp)
         say("site", "published %s" % site_dir)
     else:
@@ -108,40 +121,37 @@ def publish(p, h, domain, site_dir):
             say("site", "placeholder page written (ready for the real files)")
 
 
-def main(a):
-    if not a or a[0].startswith("-"):
-        sys.exit(__doc__)
-    domain = a[0].lower()
-    opt = dict(zip(a[1::2], a[2::2]))
-    confirmed = opt.get("--confirm-price")
-
+def ensure_zone(domain, confirmed):
     if has_zone(domain):
         say("zone", "%s already on our Cloudflare account, no purchase" % domain)
+        return
+    buy(domain, confirmed)
+    for _ in range(20):
+        if has_zone(domain):
+            break
+        time.sleep(6)
     else:
-        buy(domain, confirmed)
-        for _ in range(20):
-            if has_zone(domain):
-                break
-            time.sleep(6)
-        else:
-            stop(7, "zone not visible yet; rerun in a minute")
-        say("buy", "zone ready")
+        stop(7, "zone not visible yet; rerun in a minute")
+    say("buy", "zone ready")
 
+
+def find_vps(opt):
     profile = pick_profile(opt.get("--profile"))
     prof = json.load(open(os.path.expanduser("~/.config/aapanel/servers/%s.json" % profile)))
     ip = opt.get("--ip") or public_ip(urllib.parse.urlparse(prof["url"]).hostname)
     if not ip:
         stop(7, "cannot tell the VPS public IP from profile %s: pass --ip" % profile)
     say("vps", "profile %s, ip %s" % (profile, ip))
+    return profile, ip
 
-    p, h = aa.login(profile)
-    aa.main([profile, "ensure", domain])
-    publish(p, h, domain, opt.get("--site-dir"))
 
+def point_dns(domain, ip):
     for line in subprocess.run([sys.executable, "-I", os.path.join(HERE, "cf_domain.py"), "dns", domain, ip],
                                capture_output=True, text=True).stdout.splitlines():
         say("dns", line)
 
+
+def ensure_cert(profile, domain, ip):
     for attempt in range(0 if cert_ok(domain, ip) else 6):
         r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "aa_site.py"), profile, "cert", domain],
                            capture_output=True, text=True)
@@ -156,6 +166,8 @@ def main(a):
             stop(7, "certificate not issued; check the DNS records and rerun")
         say("cert", "already valid, kept")
 
+
+def verify_live(domain):
     bad = 0
     for host in (domain, "www." + domain):
         r = subprocess.run(["curl", "-s", "-m", "25", "-L", "-o", "/dev/null", "-w", "%{http_code} %{ssl_verify_result}", "https://%s/" % host],
@@ -164,6 +176,24 @@ def main(a):
         bad += not r.startswith("200 0")
     if bad:
         stop(7, "verify not green (a 525 means set the Cloudflare SSL mode to Full); rerun to retry")
+
+
+def main(a):
+    if not a or a[0].startswith("-"):
+        sys.exit(__doc__)
+    domain = a[0].lower()
+    opt = dict(zip(a[1::2], a[2::2]))
+
+    ensure_zone(domain, opt.get("--confirm-price"))
+    profile, ip = find_vps(opt)
+
+    p, h = aa.login(profile)
+    aa.main([profile, "ensure", domain])
+    publish(p, h, domain, opt.get("--site-dir"))
+
+    point_dns(domain, ip)
+    ensure_cert(profile, domain, ip)
+    verify_live(domain)
     say("done", "live: https://%s/" % domain)
 
 

@@ -168,104 +168,119 @@ function waveLevel(
   );
 }
 
+type Wake = {
+  readonly hullCenter: number;
+  readonly direction: number;
+  readonly phase: number;
+};
+
+/** One water-colored run per cell of low water covering absolute columns [from, from + count). */
+function waterRuns(from: number, count: number, wake: Wake): CalmWorkingShipRun[] {
+  const runs: CalmWorkingShipRun[] = [];
+  for (let column = from; column < from + count; column += 1) {
+    const level = waveLevel(column, wake.hullCenter, wake.direction, wake.phase);
+    runs.push({
+      text: CALM_WORKING_SHIP_WAVE_BARS[level] ?? CALM_WORKING_SHIP_WAVE_BARS[0],
+      color: "water",
+    });
+  }
+  return runs;
+}
+
+// The boat is one boat-colored run per row, so its halves never split into mismatched colors.
+const sail = (): CalmWorkingShipRun[] => [{ text: CALM_WORKING_SHIP_SAIL, color: "boat" }];
+const hull = (): CalmWorkingShipRun[] => [{ text: CALM_WORKING_SHIP_HULL, color: "boat" }];
+
+function composeFrame(width: number, position: number, wake: Wake): CalmWorkingShipFrame {
+  if (width < SAIL_WIDTH) {
+    // Too narrow for even the sail: a deterministic single row of low water.
+    return [waterRuns(0, width, wake)];
+  }
+  if (width < HULL_WIDTH) {
+    // Too narrow for the hull: the sail alone rides inside the water row.
+    return [
+      [
+        ...waterRuns(0, position, wake),
+        ...sail(),
+        ...waterRuns(position + SAIL_WIDTH, width - position - SAIL_WIDTH, wake),
+      ],
+    ];
+  }
+  return [
+    [{ text: " ".repeat(position + SAIL_OFFSET), color: "plain" }, ...sail()],
+    [
+      ...waterRuns(0, position, wake),
+      ...hull(),
+      ...waterRuns(position + HULL_WIDTH, width - position - HULL_WIDTH, wake),
+    ],
+  ];
+}
+
+type SpriteState = {
+  position: number;
+  direction: number;
+  span: number;
+  phase: number;
+  ticks: number;
+};
+
+const initialState = (): SpriteState => ({ position: 0, direction: 1, span: 0, phase: 0, ticks: 0 });
+
+// Reversing the moment the boat lands on an endpoint means the endpoint frame already
+// carries the new wave direction, so the trough follows the next boat movement.
+function settleDirectionAtEdges(state: SpriteState): void {
+  if (state.span <= 0) return;
+  if (state.position >= state.span) state.direction = -1;
+  else if (state.position <= 0) state.direction = 1;
+}
+
+function applyWidth(state: SpriteState, width: number): void {
+  if (width <= 0) {
+    state.span = 0;
+    state.position = 0;
+    return;
+  }
+  state.span = trackSpan(width);
+  state.position = Math.min(state.position, state.span);
+  settleDirectionAtEdges(state);
+}
+
+function advance(state: SpriteState): void {
+  state.ticks += 1;
+  state.phase = (state.phase + 1) % CALM_WORKING_SHIP_TICKS_PER_MOVE;
+  if (state.ticks % CALM_WORKING_SHIP_TICKS_PER_MOVE !== 0) return;
+  if (state.span <= 0) {
+    state.position = 0;
+    return;
+  }
+  state.position = Math.min(state.span, Math.max(0, state.position + state.direction));
+  settleDirectionAtEdges(state);
+}
+
 export function createCalmWorkingShipSprite(): CalmWorkingShipSprite {
-  let position = 0;
-  let direction = 1;
-  let span = 0;
-  let phase = 0;
-  let ticks = 0;
-  let renderedPosition = position;
-  let renderedDirection = direction;
-  let renderedSpan = span;
-  let renderedPhase = phase;
-  let renderedTicks = ticks;
-
-  // Reversing the moment the boat lands on an endpoint means the endpoint frame already
-  // carries the new wave direction, so the trough follows the next boat movement.
-  const settleDirectionAtEdges = (): void => {
-    if (span <= 0) return;
-    if (position >= span) direction = -1;
-    else if (position <= 0) direction = 1;
-  };
-
-  const applyWidth = (width: number): void => {
-    if (width <= 0) {
-      span = 0;
-      position = 0;
-      return;
-    }
-    span = trackSpan(width);
-    position = Math.min(position, span);
-    settleDirectionAtEdges();
-  };
-
-  const commitRenderedState = (): void => {
-    renderedPosition = position;
-    renderedDirection = direction;
-    renderedSpan = span;
-    renderedPhase = phase;
-    renderedTicks = ticks;
-  };
-
-  const restoreLastRenderedState = (): void => {
-    position = renderedPosition;
-    direction = renderedDirection;
-    span = renderedSpan;
-    phase = renderedPhase;
-    ticks = renderedTicks;
-  };
-
-  /** One water-colored run per cell of low water covering absolute columns [from, from + count). */
-  const water = (
-    from: number,
-    count: number,
-    hullCenter: number,
-  ): CalmWorkingShipRun[] => {
-    const runs: CalmWorkingShipRun[] = [];
-    for (let column = from; column < from + count; column += 1) {
-      const level = waveLevel(column, hullCenter, direction, phase);
-      runs.push({
-        text: CALM_WORKING_SHIP_WAVE_BARS[level] ?? CALM_WORKING_SHIP_WAVE_BARS[0],
-        color: "water",
-      });
-    }
-    return runs;
-  };
-
-  // The boat is one boat-colored run per row, so its halves never split into mismatched colors.
-  const sail = (): CalmWorkingShipRun[] => [{ text: CALM_WORKING_SHIP_SAIL, color: "boat" }];
-  const hull = (): CalmWorkingShipRun[] => [{ text: CALM_WORKING_SHIP_HULL, color: "boat" }];
+  const state = initialState();
+  let rendered = { ...state };
 
   return {
-    position: () => position,
-    direction: () => direction,
-    waterPhase: () => phase,
+    position: () => state.position,
+    direction: () => state.direction,
+    waterPhase: () => state.phase,
 
-    restoreLastRendered: restoreLastRenderedState,
+    restoreLastRendered(): void {
+      Object.assign(state, rendered);
+    },
 
     reset(): void {
-      position = 0;
-      direction = 1;
-      span = 0;
-      phase = 0;
-      ticks = 0;
-      commitRenderedState();
+      Object.assign(state, initialState());
+      rendered = { ...state };
     },
 
     clampToWidth(width: number): void {
-      applyWidth(width);
+      applyWidth(state, width);
     },
 
     tick(): void {
-      ticks += 1;
-      phase = (phase + 1) % CALM_WORKING_SHIP_TICKS_PER_MOVE;
-      if (ticks % CALM_WORKING_SHIP_TICKS_PER_MOVE !== 0) return;
-      if (span <= 0) {
-        position = 0;
-        return;
-      }
-      position = Math.min(span, Math.max(0, position + direction));
-      settleDirectionAtEdges();
+      advance(state);
     },
 
     frame(width: number): CalmWorkingShipFrame {
@@ -273,39 +288,21 @@ export function createCalmWorkingShipSprite(): CalmWorkingShipSprite {
 
       // A resize lands here before the next frame, so recompute and clamp the track
       // immediately rather than trusting a position measured against the old width.
-      applyWidth(width);
+      applyWidth(state, width);
 
       const hullCenter =
-        position +
+        state.position +
         (width >= HULL_WIDTH
           ? Math.floor(HULL_WIDTH / 2)
           : Math.floor(SAIL_WIDTH / 2));
 
-      let frame: CalmWorkingShipFrame;
-      if (width < SAIL_WIDTH) {
-        // Too narrow for even the sail: a deterministic single row of low water.
-        frame = [water(0, width, hullCenter)];
-      } else if (width < HULL_WIDTH) {
-        // Too narrow for the hull: the sail alone rides inside the water row.
-        frame = [
-          [
-            ...water(0, position, hullCenter),
-            ...sail(),
-            ...water(position + SAIL_WIDTH, width - position - SAIL_WIDTH, hullCenter),
-          ],
-        ];
-      } else {
-        frame = [
-          [{ text: " ".repeat(position + SAIL_OFFSET), color: "plain" }, ...sail()],
-          [
-            ...water(0, position, hullCenter),
-            ...hull(),
-            ...water(position + HULL_WIDTH, width - position - HULL_WIDTH, hullCenter),
-          ],
-        ];
-      }
+      const frame = composeFrame(width, state.position, {
+        hullCenter,
+        direction: state.direction,
+        phase: state.phase,
+      });
 
-      commitRenderedState();
+      rendered = { ...state };
       return frame;
     },
   };
