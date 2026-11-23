@@ -4,7 +4,9 @@ Meu repositório-base: docs para agentes e ponteiros para os meus outros repos. 
 
 ## Skills
 
-Em `.agents/skills/` (o Claude Code os vê por `.claude/skills/`), copiados da VPS sem alteração: `pr`, `buy-domain`, `aapanel`, `teach`. Um skill só entra aqui se vale para todos os repos e não custa contexto; o resto vive no repo que o usa.
+Em `.agents/skills/` (o Claude Code os vê por `.claude/skills/`), copiados da VPS sem alteração.
+
+Um skill só entra aqui se vale para todos os repos e não custa contexto (`disable-model-invocation: true`; a única exceção é o `pr`, de uma linha). Skills de engenharia (tdd, triage, wayfinder, code-review...) e de front-end vivem no repo que precisa deles, e entram lá quando o projeto pedir.
 
 ## Outros repos
 
