@@ -1,14 +1,14 @@
 {
   "default": "implement",
   "routes": {
-    "orchestrate": { "model": "anthropic/claude-opus-5-5",   "thinking": "medium" },
-    "plan":        { "model": "anthropic/claude-opus-5-5",   "thinking": "medium" },
-    "review":      { "model": "anthropic/claude-opus-5-5",   "thinking": "medium" },
-    "implement":   { "model": "anthropic/claude-sonnet-5-5", "thinking": "high" },
-    "merge":       { "model": "anthropic/claude-opus-5-5",   "thinking": "medium" },
-    "research":    { "model": "anthropic/claude-opus-5-5",   "thinking": "medium" }
+    "orchestrate": { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
+    "plan":        { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
+    "review":      { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
+    "implement":   { "model": "claude-bridge/claude-sonnet-5-5", "thinking": "high" },
+    "merge":       { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
+    "research":    { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" }
   },
   "on_request": {
-    "fable": { "model": "anthropic/claude-fable-5-2", "thinking": "medium" }
+    "fable": { "model": "claude-bridge/claude-fable-5-2", "thinking": "medium" }
   }
 }

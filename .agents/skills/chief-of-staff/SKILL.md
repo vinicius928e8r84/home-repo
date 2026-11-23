@@ -25,10 +25,10 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 ## Workers
 
-This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its own Herdr pane and its own git worktree, started from the Home Repo with `python scripts/crew.py spawn`. Run `python scripts/crew.py --help` for every command; you must be inside a Herdr pane.
+This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its own Herdr tab and its own git worktree, started from the Home Repo with `python scripts/crew.py spawn`. Run `python scripts/crew.py --help` for every command; you must be inside a Herdr pane.
 
 - **Model**: `spawn --type` picks the model from `model_routing.json`. Pass `--model` only when the user named a model for this task.
-- **Watcher**: run `python scripts/crew.py watch` once at the start of the session. It sends you a `[crew]` message when a worker ends a turn, writes its report, is merged, stalls or dies.
+- **Watcher**: starts by itself with the first `spawn`, hidden. It sends you a `[crew]` message when a worker ends a turn, writes its report, is merged, stalls or dies.
 - **On a `[crew]` message**: run `python scripts/crew.py events`, read the reports it names, and tell the user what matters.
 - **Steer**: `tell <name> "message"` reaches a worker mid-turn.
 - **Close**: `close <name>` once the worker's branch is merged.

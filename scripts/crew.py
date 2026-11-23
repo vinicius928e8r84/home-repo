@@ -10,7 +10,7 @@ chief's pane inside Herdr.
   python scripts/crew.py tell <name> "message"
   python scripts/crew.py read <name>
   python scripts/crew.py close <name>
-  python scripts/crew.py watch          (opens the watcher tab)
+  python scripts/crew.py watch          (spawn starts it by itself, hidden)
 
 Repos come from repos.json, models from model_routing.json. Every command
 prints JSON; a failure prints {"ok": false, "step": ..., "error": ...} and
@@ -302,8 +302,9 @@ def cmd_spawn(a):
         emit("spawn_failed", name, step=e.step, error=e.error)
         raise Fail(e.step, "%s (worktree %s and state kept; fix and `close %s` before retrying)" % (e.error, meta["worktree"], name))
     emit("spawned", name, repo=a.repo, type=meta["type"], model="%s:%s" % (model, level))
-    watching = os.path.exists(HEARTBEAT) and time.time() - os.path.getmtime(HEARTBEAT) < 120
-    return dict(ok=True, watching=watching, hint=None if watching else "no watcher running: run `python scripts/crew.py watch`", **meta)
+    if not watcher_alive():
+        start_watcher(my_pane("watch"))
+    return dict(ok=True, watching=True, **meta)
 
 
 def snapshot(meta, fetch, stall_minutes=0):
@@ -389,23 +390,48 @@ def describe(event):
     return "%s: %s" % (event["worker"], text.get(event["kind"], event["kind"]))
 
 
+def watcher_alive():
+    return os.path.exists(HEARTBEAT) and time.time() - os.path.getmtime(HEARTBEAT) < 90
+
+
+def start_watcher(chief, every=20, stall=20):
+    """Start the watch loop as a hidden background process; it inherits this pane's Herdr environment."""
+    os.makedirs(STATE, exist_ok=True)
+    log = open(os.path.join(STATE, "watch.log"), "a", encoding="utf-8")
+    cmd = [sys.executable, os.path.abspath(__file__), "watch", "--chief", chief, "--every", str(every), "--stall", str(stall)]
+    extra = dict(creationflags=0x08000000 | 0x00000200) if os.name == "nt" else dict(start_new_session=True)
+    try:
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **extra)
+    except OSError as e:
+        raise Fail("watch", "could not start the watcher: %s" % e)
+    return proc.pid
+
+
 def cmd_watch(a):
     if not a.chief:
         chief = my_pane("watch")
-        pane = find(herdr("pane", "tab", "create", "--workspace", chief.split(":")[0], "--cwd", ROOT, "--label", "crew-watch", "--no-focus", *passthrough()), ("pane_id",))
-        if not pane:
-            raise Fail("watch", "Herdr did not return a pane id for the watcher")
-        herdr("watch", "pane", "run", pane, "python scripts/crew.py watch --chief %s --every %d --stall %d" % (chief, a.every, a.stall))
-        return dict(ok=True, watcher_pane=pane, chief=chief)
+        if watcher_alive():
+            return dict(ok=True, already_running=True, chief=chief)
+        return dict(ok=True, watcher_pid=start_watcher(chief, a.every, a.stall), chief=chief, log=posix(os.path.join(STATE, "watch.log")))
     chief = a.chief
     herdr("herdr", "pane", "get", chief)
-    pending, loops = [], 0
+    pending, loops, quiet_since = [], 0, time.time()
     print(json.dumps(dict(ok=True, watching=True, chief=chief, every=a.every, stall_minutes=a.stall)), flush=True)
     while True:
         os.makedirs(STATE, exist_ok=True)
         with open(HEARTBEAT, "w") as f:
-            f.write(now())
-        for meta in workers():
+            f.write(json.dumps(dict(at=now(), pid=os.getpid(), chief=chief)))
+        if not pane_alive(chief):
+            print(json.dumps(dict(ok=True, stopped="the chief's pane is gone")), flush=True)
+            os.remove(HEARTBEAT)
+            return dict(ok=True, stopped="chief gone")
+        open_workers = workers()
+        if open_workers:
+            quiet_since = time.time()
+        elif time.time() - quiet_since > 600:
+            os.remove(HEARTBEAT)
+            return dict(ok=True, stopped="no open workers for 10 minutes")
+        for meta in open_workers:
             name = meta["name"]
             seen_file = os.path.join(STATE, name, "watch.json")
             old = dict(BASELINE, **file_state(seen_file))
@@ -469,8 +495,8 @@ def main():
     s.add_argument("name")
     s.add_argument("--force", action="store_true", help="close an unmerged worker; its branch is kept")
     s.set_defaults(fn=cmd_close)
-    s = sub.add_parser("watch", help="from the chief's pane: open the watcher pane, which logs turn ends, blocks, reports, merges and stalls and tells the chief")
-    s.add_argument("--chief", help="pane to notify; given, the watch loop runs here instead of opening a pane")
+    s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls and closed panes, and tells the chief. spawn starts it")
+    s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")
     s.add_argument("--every", type=int, default=20, help="seconds between checks")
     s.add_argument("--stall", type=int, default=20, help="minutes one turn may run before it counts as stalled")
     s.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)

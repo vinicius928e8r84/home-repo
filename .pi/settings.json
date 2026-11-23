@@ -1,10 +1,10 @@
 {
-  "defaultProvider": "anthropic",
+  "defaultProvider": "claude-bridge",
   "defaultModel": "claude-opus-5-5",
   "defaultThinkingLevel": "medium",
   "compaction": {
     "modelOverrides": {
-      "anthropic/claude-opus-5-5": { "reserveTokens": 850000 }
+      "claude-bridge/claude-opus-5-5": { "reserveTokens": 850000 }
     }
   }
 }
