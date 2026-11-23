@@ -4,7 +4,9 @@ Ponto de partida do agente: os skills que valem em qualquer repo e os ponteiros 
 
 ## Skills
 
-Um skill entra aqui quando vale para todos os repos e custa quase zero contexto: invocado só pelo usuário (`disable-model-invocation: true`) ou com descrição de uma linha. Os demais vivem no repo que os usa.
+Os skills daqui valem para qualquer repo; o que serve a um repo só vive nele. Skill novo entra aqui quando o usuário pedir.
+
+Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesquisas vão para o repo de que a tarefa trata, seguindo o `docs/agents/` dele quando existir. Ficam neste repo (`GLOSSARY.md` no lugar de `CONTEXT.md`) só quando a tarefa é sobre ele ou cruza repos.
 
 ## Wiki
 
