@@ -1,5 +1,6 @@
 import contextlib
 import datetime
+import hashlib
 import importlib.util
 import io
 import json
@@ -25,6 +26,10 @@ def minutes_ago(n):
     return (datetime.datetime.now().astimezone() - datetime.timedelta(minutes=n)).isoformat(timespec="seconds")
 
 
+def utc_minutes_ago(n):
+    return (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=n)).isoformat()
+
+
 class Clock:
 
     def __init__(self):
@@ -48,6 +53,7 @@ class FakeHerdr:
         self.state_files = {}
         self.calls = []
         self.next_pane = 0
+        self.screen = "screen"
         self.handlers = {
             ("pane", "get"): self.pane_get,
             ("pane", "close"): self.pane_close,
@@ -112,7 +118,7 @@ class FakeHerdr:
         return {}
 
     def pane_read(self, step, *args):
-        return "screen"
+        return self.screen
 
     def write_state(self, pane, state, turns):
         with open(self.state_files[pane], "w", encoding="utf-8") as f:
@@ -240,7 +246,7 @@ class WatcherHistory(CrewCase):
         self.assertIn("D16", self.told_chief()[0])
         self.assertNotIn("D15", self.told_chief()[0])
         self.watch()
-        self.assertEqual(len(self.told_chief()), 1, "the same event must not be announced twice")
+        self.assertEqual(len(self.told_chief()), 1)
 
 
 class SpawnDelivery(CrewCase):
@@ -255,7 +261,7 @@ class SpawnDelivery(CrewCase):
         result = self.spawn()
         self.assertTrue(result["ok"])
         pane = result["pane"]
-        self.assertEqual(len(self.herdr.sent.get(pane, [])), 1, "the brief must reach the pane once")
+        self.assertEqual(len(self.herdr.sent.get(pane, [])), 1)
         self.assertEqual(json.load(open(result["state_file"]))["state"], "working")
 
     def test_gives_up_loudly_when_the_message_never_arrives(self):
@@ -309,7 +315,7 @@ class AgentIsPi(CrewCase):
         self.assertEqual(len(flagged), 1)
         self.assertEqual(flagged[0]["agent"], "claude")
         self.watch()
-        self.assertEqual(len([e for e in self.events() if e["kind"] == "not_pi"]), 1, "flagged once")
+        self.assertEqual(len([e for e in self.events() if e["kind"] == "not_pi"]), 1)
 
     def test_board_lists_it_as_a_problem(self):
         self.add_worker(agent="claude")
@@ -340,28 +346,45 @@ class OpenDecisionIsNotStalled(CrewCase):
             self.crew.log_decision(dict(id="D1", **extra))
 
     def test_long_turn_is_stalled(self):
-        meta = self.add_worker(at=(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)).isoformat())
+        meta = self.add_worker(at=utc_minutes_ago(30))
         self.assertTrue(self.stalled(meta))
 
     def test_long_turn_with_an_open_decision_is_not_stalled(self):
-        meta = self.add_worker(at=(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)).isoformat())
+        meta = self.add_worker(at=utc_minutes_ago(30))
         self.decision("t-job")
         self.assertFalse(self.stalled(meta))
 
     def test_a_just_answered_decision_restarts_the_clock(self):
-        meta = self.add_worker(at=(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)).isoformat())
+        meta = self.add_worker(at=utc_minutes_ago(30))
         self.decision("t-job", status="answered", answered_at=minutes_ago(1), answer="a")
         self.assertFalse(self.stalled(meta))
 
     def test_an_old_answered_decision_does_not_hide_a_stall(self):
-        meta = self.add_worker(at=(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)).isoformat())
+        meta = self.add_worker(at=utc_minutes_ago(30))
         self.decision("t-job", status="answered", answered_at=minutes_ago(25), answer="a")
         self.assertTrue(self.stalled(meta))
 
     def test_another_workers_decision_does_not_count(self):
-        meta = self.add_worker(at=(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)).isoformat())
+        meta = self.add_worker(at=utc_minutes_ago(30))
         self.decision("someone-else")
         self.assertTrue(self.stalled(meta))
+
+
+class ProgressIsNotStalled(CrewCase):
+    def stalled_when_the_screen_becomes(self, screen):
+        meta = self.add_worker(at=utc_minutes_ago(30))
+        self.herdr.screen = "before"
+        mark = hashlib.sha1(self.crew.progress_mark(meta).encode()).hexdigest()
+        with open(os.path.join(self.state, "t-job", "watch.json"), "w") as f:
+            json.dump(dict(progress=dict(mark=mark, at=minutes_ago(25))), f)
+        self.herdr.screen = screen
+        return self.crew.snapshot(meta, False, 20)["stalled"]
+
+    def test_a_screen_that_stays_the_same_is_stalled(self):
+        self.assertTrue(self.stalled_when_the_screen_becomes("before"))
+
+    def test_a_screen_that_changed_is_not_stalled(self):
+        self.assertFalse(self.stalled_when_the_screen_becomes("a new line"))
 
 
 class CloseForce(CrewCase):

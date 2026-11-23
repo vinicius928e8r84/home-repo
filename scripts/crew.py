@@ -14,6 +14,7 @@ chief's pane inside Herdr.
   python scripts/crew.py read <name>
   python scripts/crew.py close <name>
   python scripts/crew.py watch          (spawn starts it by itself, hidden)
+  python scripts/crew.py guard          (the chief's turn-end hook runs it: no worker left unwatched)
 
 Repos come from repos.json, models from model_routing.json. Every command
 prints JSON; a failure prints {"ok": false, "step": ..., "error": ...} and
@@ -21,6 +22,7 @@ exits 1.
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -253,6 +255,8 @@ Você é um worker aberto pelo orquestrador do Home Repo. O dono não está olha
 
 {request}
 
+Faça o que o pedido diz, e só isso. O que ele não pediu (generalizar, varrer o resto do repo, endurecer além do necessário) não entra no trabalho: anote em "Sugestões" no relatório, e o dono decide.
+
 ## Pronto quando
 
 {done_when}
@@ -292,6 +296,9 @@ O comando rodado e o que ele mostrou.
 
 ## Falta
 O que ficou de fora e por quê; as decisões que você registrou e ainda esperam resposta.
+
+## Sugestões
+O que você viu e não fez porque o pedido não mandava. Uma linha cada; sem nada, escreva "nenhuma".
 
 ## Próximo passo sugerido
 Uma linha: revisar e juntar, abrir outra tarefa, ou decidir X.
@@ -409,6 +416,33 @@ def has_own_commit(meta):
     return not entries or any(e.startswith(OWN_COMMIT) for e in entries)
 
 
+def progress_mark(meta):
+    head = subprocess.run(["git", "-C", meta["repo_path"], "rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
+    try:
+        screen = str(herdr("agent", "pane", "read", meta["pane"], "--source", "recent-unwrapped", "--lines", "40"))
+    except (Fail, KeyError):
+        screen = ""
+    screen = re.sub(r"[\u2800-\u28ff]", "", screen)
+    screen = re.sub(r"^.*Elapsed.*$", "", screen, flags=re.M)
+    return head + chr(10) + screen
+
+
+def progress_since(meta, seen):
+    mark = hashlib.sha1(progress_mark(meta).encode("utf-8", "replace")).hexdigest()
+    last = file_state(os.path.join(STATE, meta["name"], "watch.json")).get("progress")
+    if not last:
+        return dict(mark=mark, at=seen["at"])
+    return last if last["mark"] == mark else dict(mark=mark, at=now())
+
+
+def quiet_minutes(meta, seen, progress):
+    mine = [d for d in decisions().values() if d.get("worker") == meta["name"]]
+    if any(d.get("status") == "open" for d in mine):
+        return 0
+    answered = [minutes_since(d["answered_at"]) for d in mine if d.get("answered_at")]
+    return min([minutes_since(seen["at"]), minutes_since(progress["at"])] + answered)
+
+
 def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     state, agent = worker_view(meta)
     seen = file_state(meta.get("state_file", ""))
@@ -423,10 +457,8 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
         merged = subprocess.run(["git", "-C", meta["repo_path"], "merge-base", "--is-ancestor", head, meta["base"]], capture_output=True)
         snap["merged"] = merged.returncode == 0
     if state == "working" and stall_minutes and seen.get("at"):
-        mine = [d for d in decisions().values() if d.get("worker") == meta["name"]]
-        if not any(d.get("status") == "open" for d in mine):
-            quiet = min([minutes_since(seen["at"])] + [minutes_since(d["answered_at"]) for d in mine if d.get("answered_at")])
-            snap["stalled"] = quiet > stall_minutes
+        snap["progress"] = progress_since(meta, seen)
+        snap["stalled"] = quiet_minutes(meta, seen, snap["progress"]) > stall_minutes
     return snap
 
 
@@ -562,7 +594,7 @@ def cmd_board(a):
         out.append("## Com problema (%d)" % len(trouble))
         for m in trouble:
             snap = m["_snap"]
-            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "o agente do painel é %s, não Pi" % snap["agent"] if snap["not_pi"] else "o painel abriu mas o Pi nunca começou (0 turnos)" if snap["unstarted"] else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
+            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "o agente do painel é %s, não Pi" % snap["agent"] if snap["not_pi"] else "o painel abriu mas o Pi nunca começou (0 turnos)" if snap["unstarted"] else "sem progresso há mais de 20 min (a tela e os commits não mudaram)" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
             out.append("- **%s** [%s] %s" % (m["name"], m["repo"], why))
         out.append("")
     out.append("## Onde você parou em cada projeto")
@@ -720,7 +752,7 @@ def notice_cursor(total):
 
 def describe(event):
     text = {"turn_ended": "terminou um turno", "gone": "o painel fechou",
-            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais",
+            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "não progride: a tela e os commits não mudam há tempo demais",
             "never_started": "o painel abriu mas o Pi nunca começou (0 turnos)"}
     if event["kind"] == "not_pi":
         return "%s: o agente do painel agora é %s, não Pi (o restore do Herdr reabriu o painel; o contexto do worker se perdeu)" % (event["worker"], event.get("agent"))
@@ -815,6 +847,18 @@ def cmd_watch(a):
         time.sleep(a.every)
 
 
+def cmd_guard(a):
+    if not workers() or watcher_alive():
+        return dict(ok=True, revived=False)
+    start_watcher(my_pane("guard"))
+    deadline = time.time() + a.wait
+    while not watcher_alive():
+        if time.time() > deadline:
+            raise Fail("guard", "the watcher was started but wrote no heartbeat in %ds; see %s" % (a.wait, posix(os.path.join(STATE, "watch.log"))))
+        time.sleep(0.5)
+    return dict(ok=True, revived=True)
+
+
 def main():
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
@@ -826,7 +870,7 @@ def main():
     s.add_argument("task", help="short task name, used in the worker, worktree and branch names")
     s.add_argument("--type", help="a route of model_routing.json (default: its `default`)")
     s.add_argument("--model", help="override: an on_request name (e.g. fable) or provider/id:thinking")
-    s.add_argument("--request", help="what the worker must do")
+    s.add_argument("--request", help="what the worker must do, in the owner's own words")
     s.add_argument("--request-file", help="file holding the request")
     s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
     s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
@@ -868,10 +912,13 @@ def main():
     s = sub.add_parser("watch", help="the hidden background watcher: logs turn ends, reports, merges, stalls, workers that never started, panes that died or stopped being Pi, and tells the chief. spawn starts it")
     s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")
     s.add_argument("--every", type=int, default=20, help="seconds between checks")
-    s.add_argument("--stall", type=int, default=20, help="minutes one turn may run before it counts as stalled")
+    s.add_argument("--stall", type=int, default=20, help="minutes without progress (same screen, same commits) before a working worker counts as stalled")
     s.add_argument("--unstarted", type=int, default=UNSTARTED_MINUTES, help="minutes a worker may sit at 0 turns before it counts as never started")
     s.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_watch)
+    s = sub.add_parser("guard", help="restart the watcher when a worker is open and it is dead; the chief's turn-end hook runs this")
+    s.add_argument("--wait", type=int, default=15, help="seconds to wait for the restarted watcher's first heartbeat")
+    s.set_defaults(fn=cmd_guard)
     a = p.parse_args()
     try:
         result = a.fn(a)
