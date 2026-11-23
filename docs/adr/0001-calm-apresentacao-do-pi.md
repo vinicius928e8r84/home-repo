@@ -23,10 +23,9 @@ O símbolo global que cada adaptador usa para não aplicar o patch duas vezes ca
 ## Entrada operacional (`fm-operational-input.ts`, `fm-calm-operational-user-layout.ts`)
 
 - O adaptador de linha do usuário muda só a apresentação e nunca a entrega da mensagem.
-- Um único dono decide como cada comando é chamado e como o status de saída e o stdout viram resposta. Os chamadores síncrono e assíncrono compartilham esse dono, para os dois nunca divergirem.
-- O ramo de supervisão codifica na thread de renderização do Pi enquanto entrega um resultado ao capitão. Esse chamador precisa esperar o processo filho em vez de parar a TUI, então fornece a espera. Tudo o que faz daquilo uma codificação (o script, o formato dos argumentos e a conversão do status e do stdout em resposta) continua no módulo. O executor é parâmetro, e não importação, para que as extensões que já carregam o módulo não precisem carregar um auxiliar de `spawn` que nunca chamam.
+- A marca é o caractere invisível U+2063, o tipo e outro U+2063 na frente do texto. Codificar é concatenar e classificar é ler a marca, sem processo filho: o `bin/fm-operational-input.sh` que o Firstmate chamava não existe neste repo, e sem ele a classificação falhava e nada ficava escondido. Quem manda um aviso do vigia ou do guarda de fim de turno (`crew-turnend-guard.ts`) o codifica com `watcher` ou `turn-end-guard`.
 - O Calm esconde, além dos tipos operacionais atuais, só uma forma operacional legada. O conjunto legado maior de `classify` fica de fora, porque suas formas "nuas" são texto que o capitão pode digitar, e esconder isso esconderia entrada real.
-- Uma função única responde "o Calm pode esconder esta entrada exata?". Os adaptadores de linha do transcrito e de linha enfileirada a compartilham, para nunca discordarem sobre uma mensagem. Texto sem o marcador U+2063 responde sem chamar o classificador.
+- Uma função única responde "o Calm pode esconder esta entrada exata?". Os adaptadores de linha do transcrito e de linha enfileirada a compartilham, para nunca discordarem sobre uma mensagem. Texto sem o marcador U+2063 nunca é escondido.
 
 ## Linhas enfileiradas (`fm-calm-pending-operational-layout.ts`)
 
