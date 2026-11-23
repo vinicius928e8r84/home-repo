@@ -6,6 +6,7 @@ chief's pane inside Herdr.
 
   python scripts/crew.py board                      the whole fleet: decisions waiting, running, to review
   python scripts/crew.py spawn <repo> <task> --type implement --request "..." --done "..."
+  python scripts/crew.py spawn <repo> <task> --host vps ...   (the worker runs on that ssh host: scripts/crew_remote.py)
   python scripts/crew.py ask "question" --recommend "..."     (a worker asks the owner)
   python scripts/crew.py answer D3 "the owner's answer"
   python scripts/crew.py status
@@ -23,6 +24,7 @@ exits 1.
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -47,6 +49,44 @@ class Fail(Exception):
     def __init__(self, step, error):
         super().__init__(error)
         self.step, self.error = step, error
+
+
+class Namespace:
+    def __getattr__(self, name):
+        return globals()[name]
+
+
+REMOTE = []
+
+
+def remote():
+    if not REMOTE:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crew_remote.py")
+        spec = importlib.util.spec_from_file_location("crew_remote", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.Fail, module.crew = Fail, Namespace()
+        REMOTE.append(module)
+    return REMOTE[0]
+
+
+def git_argv(meta):
+    return remote().git_argv(meta) if meta.get("host") else ["git", "-C", meta["repo_path"]]
+
+
+def worktree_present(meta):
+    if meta.get("host"):
+        return remote().path_exists(meta["host"], meta["worktree"], "-d")
+    return os.path.isdir(meta["worktree"])
+
+
+def sync_remote():
+    behind_ssh = [m for m in workers() if m.get("host")]
+    if behind_ssh:
+        try:
+            remote().sync(behind_ssh)
+        except (Fail, OSError) as e:
+            print("remote sync failed (%s): %s" % (getattr(e, "step", "io"), getattr(e, "error", e)), file=sys.stderr)
 
 
 def now():
@@ -78,6 +118,10 @@ def run(step, cmd, cwd=None):
 
 def herdr(step, *args):
     """Run a Herdr command. CREW_HERDR_SESSION targets a named session from outside it (tests)."""
+    if len(args) > 2 and str(args[2]).startswith("@"):
+        host, plain = remote().pane_on_host(args)
+        if host:
+            return remote().herdr(host, step, *plain)
     session = os.environ.get("CREW_HERDR_SESSION")
     if not session and os.environ.get("HERDR_ENV") != "1":
         raise Fail(step, "not inside a Herdr pane (HERDR_ENV is not 1): open Herdr and run the chief from a pane")
@@ -152,8 +196,8 @@ def find(obj, keys, allowed=None):
 def pane_info(pane):
     try:
         reply = herdr("pane", "pane", "get", pane)
-    except Fail:
-        return None
+    except Fail as e:
+        return {} if e.step == "ssh" else None
     info = reply.get("result", {}).get("pane") if isinstance(reply, dict) else None
     return info if isinstance(info, dict) else {}
 
@@ -174,7 +218,7 @@ def worker_view(meta):
     """(state, agent): the state is idle, working or gone, what the worker's own Pi last wrote unless its pane is closed;
     the agent is what Herdr detects in the pane (None when unknown)."""
     state = file_state(meta.get("state_file", "")).get("state", "starting")
-    inside = os.environ.get("HERDR_ENV") == "1" or os.environ.get("CREW_HERDR_SESSION")
+    inside = os.environ.get("HERDR_ENV") == "1" or os.environ.get("CREW_HERDR_SESSION") or meta.get("host")
     agent = None
     if state != "gone" and meta.get("pane") and inside:
         info = pane_info(meta["pane"])
@@ -249,67 +293,6 @@ def route_for(task_type, model):
     return route["model"], route["thinking"]
 
 
-BRIEF = """# Tarefa: {task} ({type})
-
-Você é um worker aberto pelo orquestrador do Home Repo. O dono não está olhando este painel: ele só vê o que você escrever no relatório e as decisões que você pedir.
-
-## Pedido
-
-{request}
-
-Faça o que o pedido diz, e só isso. O que ele não pediu (generalizar, varrer o resto do repo, endurecer além do necessário) não entra no trabalho: anote em "Sugestões" no relatório, e o dono decide.
-
-## Pronto quando
-
-{done_when}
-
-Só isso conta como pronto. Verifique rodando de verdade (teste, comando, leitura do resultado) antes de escrever o relatório.
-{context_block}
-## Onde você trabalha
-
-- Pasta: `{worktree}` (um worktree só seu do repo {repo}). Trabalhe só dentro dela.
-- Branch: `{branch}`, criada a partir de `{base}`.
-- Leia o `AGENTS.md` desta pasta antes de qualquer outra coisa e siga-o.
-- Skills: os do repo ficam em `.claude/skills/` e `.agents/skills/` desta pasta; os gerais em `{home}/.agents/skills/`. Leia o `SKILL.md` do que a tarefa pedir, como arquivo.
-- Faça commits pequenos nesta branch. Push, merge e PR só se o pedido mandar.
-
-## Decisão que cabe ao dono
-
-Escopo, gasto, algo irreversível, ou duas saídas boas entre as quais só ele escolhe: registre a pergunta, com a sua recomendação, e siga com tudo o que não depende dela.
-
-```
-python "{home}/scripts/crew.py" ask "a pergunta, com o contexto que ele precisa para responder sem abrir o código" --recommend "o que você faria e por quê"
-```
-
-A resposta chega como uma mensagem começando com `[chief]`. Toda mensagem `[chief]` vem do orquestrador e tem prioridade sobre o que você está fazendo.
-
-## Relatório
-
-Ao terminar, ou ao ficar sem nada que possa fazer, escreva `{report}` assim:
-
-```
-**Resultado**: feito | parcial | bloqueado — uma linha dizendo o que o dono tem agora.
-
-## O que mudou
-Os commits, com o hash, e o que cada um faz.
-
-## Como verifiquei
-O comando rodado e o que ele mostrou.
-
-## Falta
-O que ficou de fora e por quê; as decisões que você registrou e ainda esperam resposta.
-
-## Sugestões
-O que você viu e não fez porque o pedido não mandava. Uma linha cada; sem nada, escreva "nenhuma".
-
-## Próximo passo sugerido
-Uma linha: revisar e juntar, abrir outra tarefa, ou decidir X.
-```
-
-Escreva para quem não acompanhou o trabalho: frases completas, sem siglas que você criou no caminho. Depois de escrever o arquivo, pare e espere; o orquestrador é avisado sozinho.
-"""
-
-
 def deliver_brief(meta, pane, wait, tries=3):
     for attempt in range(tries):
         if attempt == 1:
@@ -348,6 +331,12 @@ def cmd_spawn(a):
     context_block = ""
     if a.context:
         context_block = "\n## Contexto\n\nLeia antes de começar:\n\n" + "\n".join("- " + item for item in a.context) + "\n"
+
+    host = a.host or repo.get("host")
+    if host and host != "local":
+        job = dict(repo=repo, name=name, task=task, model=model, level=level, request=request,
+                   context_block=context_block, host=host)
+        return remote().spawn(a, job)
 
     path = os.path.expanduser(repo["path"])
     if not os.path.isdir(os.path.join(path, ".git")):
@@ -413,13 +402,13 @@ OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")
 
 
 def has_own_commit(meta):
-    out = subprocess.run(["git", "-C", meta["repo_path"], "log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
+    out = subprocess.run(git_argv(meta) + ["log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
     entries = out.stdout.splitlines() if out.returncode == 0 else []
     return not entries or any(e.startswith(OWN_COMMIT) for e in entries)
 
 
 def progress_mark(meta):
-    head = subprocess.run(["git", "-C", meta["repo_path"], "rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(git_argv(meta) + ["rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
     try:
         screen = str(herdr("agent", "pane", "read", meta["pane"], "--source", "recent-unwrapped", "--lines", "40"))
     except (Fail, KeyError):
@@ -453,10 +442,10 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     snap["unstarted"] = bool(state in ("idle", "starting") and snap["turns"] == 0 and not meta.get("error")
                              and minutes_since(meta.get("started")) > unstarted_minutes)
     if fetch:
-        subprocess.run(["git", "-C", meta["repo_path"], "fetch", "--quiet", "origin"], capture_output=True)
-    head = subprocess.run(["git", "-C", meta["repo_path"], "rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
+        subprocess.run(git_argv(meta) + ["fetch", "--quiet", "origin"], capture_output=True)
+    head = subprocess.run(git_argv(meta) + ["rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
     if head and head != meta.get("base_sha") and has_own_commit(meta):
-        merged = subprocess.run(["git", "-C", meta["repo_path"], "merge-base", "--is-ancestor", head, meta["base"]], capture_output=True)
+        merged = subprocess.run(git_argv(meta) + ["merge-base", "--is-ancestor", head, meta["base"]], capture_output=True)
         snap["merged"] = merged.returncode == 0
     if state == "working" and stall_minutes and seen.get("at"):
         snap["progress"] = progress_since(meta, seen)
@@ -626,6 +615,7 @@ def cmd_board(a):
 
 def ensure_watcher():
     """Open workers with nobody watching them: start the watcher, when this runs in a Herdr pane."""
+    sync_remote()
     if workers() and not watcher_alive() and os.environ.get("HERDR_PANE_ID"):
         try:
             start_watcher(my_pane("watch"))
@@ -638,7 +628,7 @@ def cmd_status(a):
     rows = []
     for meta in workers(a.all):
         snap = dict(state="closed") if meta.get("closed") else snapshot(meta, False)
-        rows.append(dict(name=meta["name"], repo=meta["repo"], type=meta["type"], model=meta["model"], state=snap["state"],
+        rows.append(dict(name=meta["name"], repo=meta["repo"], host=meta.get("host"), type=meta["type"], model=meta["model"], state=snap["state"],
                          report=meta["report"] if snap.get("report") else None, merged=snap.get("merged", False),
                          branch=meta["branch"], worktree=meta["worktree"], error=meta.get("error")))
     return dict(ok=True, workers=rows)
@@ -709,12 +699,12 @@ def cmd_close(a):
             herdr("pane", "pane", "close", meta["pane"])
         except Fail as e:
             notes.append("pane: " + e.error)
-    if os.path.isdir(meta["worktree"]):
-        cmd = ["git", "-C", meta["repo_path"], "worktree", "remove", meta["worktree"]] + (["--force"] if a.force else [])
+    if worktree_present(meta):
+        cmd = git_argv(meta) + ["worktree", "remove", meta["worktree"]] + (["--force"] if a.force else [])
         try:
             run("worktree", cmd)
         except Fail as e:
-            if not a.force:
+            if not a.force or meta.get("host"):
                 raise
             notes.append("worktree: " + e.error)
             drop_folder(meta, notes)
@@ -730,6 +720,9 @@ def file_text(path):
             return f.read().strip()
     except OSError:
         return ""
+
+
+BRIEF = file_text(os.path.join(ROOT, "scripts", "crew-brief.md")) + "\n"
 
 
 def write_text(path, text):
@@ -819,6 +812,7 @@ def cmd_watch(a):
             print(json.dumps(dict(ok=True, stopped="the chief's pane is gone")), flush=True)
             os.remove(HEARTBEAT)
             return dict(ok=True, stopped="chief gone")
+        sync_remote()
         open_workers = workers()
         if open_workers:
             quiet_since = time.time()
@@ -882,6 +876,7 @@ def main():
     s.add_argument("--request-file", help="file holding the request")
     s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
     s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
+    s.add_argument("--host", help="ssh host to run the worker on (default: the repo's `host` in repos.json; `local` forces this machine)")
     s.add_argument("--start-timeout", type=int, default=90, help="seconds to wait for Pi to be ready")
     s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the brief")
     s.add_argument("--dry-run", action="store_true", help="print the plan; create nothing")
