@@ -11,3 +11,5 @@ Preferências do dono, ditas em 2026-11-23.
 - Toda página lavish vai com o link no chat também, porque às vezes ela não abre sozinha.
 - O alvo é um firstmate nosso, só que mínimo: proteger a janela de contexto e trabalhar na smart zone. Do firstmate (github.com/kunchenguid/firstmate) vale trazer a guarda de fim de turno, o roteiro para worker travado e o brief que não alarga o pedido; o `/stow` já é coberto pela wiki do chief. Secondmates talvez depois, quando houver mais repos.
 - O glossário do home-repo (`GLOSSARY.md`) é definido aos poucos, na conversa, para que o dono e o chief fiquem cada vez mais alinhados.
+- O chief só orquestra: toda tarefa, inclusive página lavish, wayfinder e sessão de grill, vai para um worker, e o chief atualiza o dono no chat quando ela termina (2026-11-23).
+- Do sf-kit (github.com/fullstacksushil/sf-kit) o dono quer: teto de tamanho por arquivo, freios antes de aceleradores e revisor que é outro agente. Rotinas e automações virão; o dono quer saber organizá-las e ver se deram certo ou falharam.
