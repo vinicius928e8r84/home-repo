@@ -61,7 +61,7 @@ Cada linha é um estado distinto no `board` e um aviso "PAROU por X" (ou "em ris
 | Turno normal sem saída | `ended=ok`, sem relatório, sem decisão aberta | `parou: sem relatório` | é o caso que o board já mostra como "parou sem relatório e sem pedir decisão"; o vigia passa a avisar |
 | Painel morto | `herdr pane get` falha | `parou: painel fechou` | não conta quando o `close` marcou `closing` (PR #7) |
 | Pi saiu, painel ficou | painel vivo, `agent` do Herdr vazio ou shell, `alive_at` velho | `parou: Pi saiu` | exige as duas coisas |
-| Outro agente no painel | `agent` do Herdr diferente de `pi` | `parou: não é Pi` | já na main (`not_pi`) |
+| Outro agente no painel | `agent` do Herdr diferente de `pi` | `parou: não é Pi` | já na main (`not_pi`); espera o dono, nunca reabre sozinho |
 | Pi congelado | `state=working`, `alive_at` com mais de 3 min, painel ainda com Pi, disco fora do crítico | `parou: Pi congelado` | o temporizador roda mesmo com ferramenta longa; com disco crítico vale `disco cheio` |
 | Travado sem progresso | `working`, sem `tool` em curso, `activity_at` com mais de 20 min | `em risco: sem progresso` | soma-se à tela e aos commits que o `stalled` da main já mede (`quiet_minutes`); resposta a decisão zera |
 | Processo filho pendurado | `tool` em curso há mais de 30 min | `em risco: comando pendurado (bash: npm test)` | o tempo é por ferramenta; um `sleep` pedido não passa de 30 min |
@@ -86,10 +86,10 @@ O vigia retoma com `crew.py resume <worker>`: manda ao painel `[chief] Retomada 
 | rede | sim | teste de rede passa | sem limite; espera a rede |
 | API fora, bridge | sim | — | 4 tentativas: 2, 5, 15 e 30 min; depois, o chief |
 | limite de uso da janela | sim | passou a hora de reset (ou 30 min, quando a mensagem não diz) | uma por janela de reset; o dono recebe um aviso só |
-| Pi congelado, Pi saiu, painel fechou, não é Pi | sim, por `revive` e `relaunch` (abaixo) | o worktree existe e o disco não está crítico | 2 tentativas, 1 e 5 min; depois, o chief |
+| Pi congelado, Pi saiu, painel fechou | sim, por `revive` e `relaunch` (abaixo) | o worktree existe e o disco não está crítico | 2 tentativas, 1 e 5 min; depois, o chief |
 | sem relatório | não: o chief lê o painel e decide | — | — |
 | erro do Pi desconhecido | uma tentativa em 2 min; depois, o chief | — | 1 |
-| credencial, crédito esgotado, recusa, interrompido | não: o dono | — | — |
+| credencial, crédito esgotado, recusa, interrompido, não é Pi | não: o dono | — | — |
 
 O `429` por minuto (`rate_limit` sem janela de reset) é API instável: 2, 5, 15 e 30 min. Só o limite da janela de 5 horas ou da semana espera o reset.
 
@@ -102,7 +102,7 @@ A conversa do worker vive no arquivo de sessão do Pi; o que se perde é o proce
 1. `spawn` abre o Pi com `--session-id crew-<worker>-<AAAAMMDDhhmm>`; o id fica no `meta.json`. Abrir de novo com o mesmo id devolve a mesma conversa.
 2. Comando novo `crew.py relaunch <worker>`: põe `CREW_STATE_FILE` e `CREW_AGENT_NAME` no ambiente e roda o mesmo `pi --approve -e crew-state.ts --model <modelo do worker> --session-id <id>`. Na VPS, com o `herdr` e o `pi` próprios da PR #11.
 3. O `crew-state.ts` registra no Herdr o comando de retomada do painel: `herdr pane report-agent-session <painel> --source crew --agent pi -- python <home>/scripts/crew.py relaunch <worker>`. No restore, o Herdr reabre o worker por esse comando, com extensão, modelo e ambiente. A integração pi v9 só informa o caminho da sessão e não se desliga por painel; falta provar que o registro do `crew`, feito depois, é o que vale. Se não for, `resume_agents_on_restore = false` e vale o passo 4 (D40).
-4. `crew.py revive`: para cada worker aberto com painel morto, ou com painel vivo que não é Pi (por restore do Herdr ou por qualquer outro motivo; é o único tratamento de `não é Pi`), abre uma aba nova e roda `relaunch`. O painel antigo fica aberto, para nada se perder, e o chief recebe o aviso. Roda no início do vigia e no `board`.
+4. `crew.py revive`: para cada worker aberto com painel morto, abre uma aba nova e roda `relaunch`. Painel vivo com outro agente (`não é Pi`) não entra: espera o dono, mesmo depois de um restore. Roda no início do vigia e no `board`.
 5. Depois de voltar, o vigia manda a mensagem de retomada com a causa "o computador reiniciou". O turno que estava no meio se perde; a mensagem manda conferir o `git status`.
 
 No PC, alguém precisa acordar depois do boot. Uma tarefa do Agendador de Tarefas "ao fazer logon" roda `crew.py boot`: sobe o servidor do Herdr, roda `revive` e liga o vigia. O vigia hoje exige o painel do chief vivo; passa a rodar sem ele, deixando os avisos no inbox, e o chief os lê quando abrir.
