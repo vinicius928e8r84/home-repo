@@ -403,7 +403,7 @@ def minutes_since(stamp):
     return (datetime.datetime.now(then.tzinfo) - then).total_seconds() / 60
 
 
-OWN_COMMIT = ("commit", "rebase (pick)", "rebase (reword)", "rebase (edit)", "rebase (squash)", "rebase (fixup)", "cherry-pick", "revert", "am")
+OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")  # a rebase logs only "rebase (finish)" on the branch (its picks go to the HEAD reflog); the original "commit:" entry survives it
 
 
 def has_own_commit(meta):
