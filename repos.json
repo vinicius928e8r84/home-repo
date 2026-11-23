@@ -12,5 +12,12 @@
     "remote": "https://github.com/vinicius928e8r84/PerpetualMiner",
     "default_branch": "main",
     "branch": "pi/{task}"
+  },
+  "home-repo": {
+    "short": "home",
+    "path": "~/home-repo",
+    "remote": "https://github.com/vinicius928e8r84/home-repo",
+    "default_branch": "main",
+    "branch": "pi/{task}"
   }
 }
