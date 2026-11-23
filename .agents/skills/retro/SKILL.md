@@ -24,7 +24,7 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 
 4. Present these candidates to the user, in order of severity.
 
-5. If a candidate is a lesson about a skill (an existing skill should change), follow `~/.agents/skills/reflect/SKILL.md` to route it into an edit on that skill.
+5. If a candidate is a lesson about a skill (an existing skill should change), edit that skill's `SKILL.md` under `.agents/skills/<name>/` in the repo it lives in.
 
 ## Reference
 

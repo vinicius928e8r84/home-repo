@@ -10,7 +10,7 @@ A **wizard** is a bash script that walks a human, step by step, through a manual
 
 The delightful UX is already solved by [template.sh](template.sh): stage-by-stage progress, confirmation gates, cross-platform URL opening (including WSL), hidden secret entry, idempotent `.env` upserts, `gh secret`/`gh variable` writes, recoverable-input retry helpers, and a closing summary. **Your job is only to scope the procedure and author its stages.** The library above the `STAGES` marker is identical in every wizard; that consistency is the point: never hand-edit it.
 
-Every wizard is resilient by default. Invalid, empty, mismatched, or otherwise recoverable input repeats the same question while preserving accepted values; only `Ctrl-C`, an explicit cancel choice, or refusal of a security/irreversibility confirmation ends the run. A reusable wizard also exposes an automatic launcher through [open.sh](open.sh): in Herdr it opens a dedicated focused tab, while elsewhere it runs in an interactive terminal or prints the exact manual command.
+Every wizard is resilient by default. Invalid, empty, mismatched, or otherwise recoverable input repeats the same question while preserving accepted values; only `Ctrl-C`, an explicit cancel choice, or refusal of a security/irreversibility confirmation ends the run.
 
 A wizard is ephemeral by default: built for one run, saved to a scratch or `scripts/` path, deleted when the job's done. Commit it only when the user wants a repeatable setup path that should live in the repo.
 
@@ -39,12 +39,10 @@ Copy `template.sh` to the target path. Replace the example stage with one `stage
 
 Hold the bar the template sets: open the URL before asking for its value, use `ask_secret_confirm` for a new secret, use `ask_valid` for constrained visible input, `write_env` every persisted environment value, `set_secret` only the values CI actually needs, and `confirm` before any irreversible action. Recoverable validation stays inside those retry helpers rather than exiting the script. Each `stage` clears the screen so only the current step is visible: keep a stage to one focused task so nothing the human needs scrolls away. Don't touch the library above the marker.
 
-For a reusable wizard, make its owning skill or handoff invoke `open.sh <wizard-path> <label>` automatically when setup is missing. Do not ask the human to copy a command when Herdr can open the interactive tab directly.
-
 ### 4. Verify and hand off
 
 - `bash -n <script>`; run `shellcheck` if available.
 - `chmod +x <script>`.
 - Exercise each validation function directly and prove every recoverable rejection loops instead of exiting; reserve exit paths for explicit cancellation and security boundaries.
 - Don't run the wizard end-to-end yourself: it opens browsers and blocks on human input. Trace it statically instead: every value from step 1 is captured and lands where step 1 said, and every `set_secret` name exactly matches a `secrets.*` reference in CI.
-- For a reusable wizard, validate `open.sh <wizard-path> <label>` outside Herdr without launching and inspect its Herdr command path statically. If it's a repeatable project setup path, commit it and link it from the README so the next person runs the launcher instead of asking an AI.
+- If it's a repeatable project setup path, commit it and link it from the README so the next person runs it instead of asking an AI.
