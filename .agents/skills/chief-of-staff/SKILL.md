@@ -23,6 +23,17 @@ Use background agents so you can stay in active dialogue with the user. Start ev
 
 Communication to and from subagents should be sparse. Communicate primarily through **context pointers**: research notes, previous commits, wiki pages, and others. Don't duplicate information already available via pointers.
 
+## Workers
+
+This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its own Herdr pane and its own git worktree, started from the Home Repo with `python scripts/crew.py spawn`. Run `python scripts/crew.py --help` for every command; you must be inside a Herdr pane.
+
+- **Model**: `spawn --type` picks the model from `model_routing.json`. Pass `--model` only when the user named a model for this task.
+- **Watcher**: run `python scripts/crew.py watch` once at the start of the session. It sends you a `[crew]` message when a worker ends a turn, writes its report, is merged, stalls or dies.
+- **On a `[crew]` message**: run `python scripts/crew.py events`, read the reports it names, and tell the user what matters.
+- **Steer**: `tell <name> "message"` reaches a worker mid-turn.
+- **Close**: `close <name>` once the worker's branch is merged.
+- **Failure**: a command that fails prints the step that failed. Tell the user; fix the cause before retrying.
+
 ## Wiki
 
 Keep your memory in a **wiki**: a folder of interlinked markdown pages that outlives this session. Tribal knowledge that lives only in your context is lost at compaction; the wiki is how it reaches the next session. Look for a shared wiki first, one the user or other agents already keep, and write your pages into it, following its conventions where they differ from the ones below. Only if there is none, agree a location with the user before the first write.

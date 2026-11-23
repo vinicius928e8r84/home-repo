@@ -16,7 +16,7 @@ Um skill daqui age no repo do trabalho: glossário, ADRs, specs, tickets e pesqu
 
 Antes de trabalhar em um deles, rode `git pull` (o clone local fica atrás do GitHub) e leia o AGENTS.md dele. Os skills de um repo não carregam aqui: quando a tarefa pedir um, leia o `SKILL.md` dele em `.claude/skills/<nome>/` como arquivo e siga-o.
 
-Cada tarefa roda no seu próprio worktree, para agentes em paralelo não dividirem a mesma pasta: `git -C ~/<repo> worktree add ~/worktrees/<repo>-<tarefa> -b <branch>`, com o nome de branch que o AGENTS.md do repo pede. Remova o worktree depois do merge.
+Para delegar a agentes, cada um no seu worktree: `python scripts/crew.py --help`. Os caminhos e remotes dos repos estão em `repos.json`.
 
-- Nova-AI (port do Nova AI para macOS + iPhone, em Electron): `~/Nova-AI`. Clone de https://github.com/vinicius928e8r84/Nova-AI se faltar.
-- PerpetualMiner (extensão Chrome que minera frases e as envia ao Anki): `~/PerpetualMiner`. Clone de https://github.com/vinicius928e8r84/PerpetualMiner se faltar.
+- Nova-AI (port do Nova AI para macOS + iPhone, em Electron).
+- PerpetualMiner (extensão Chrome que minera frases e as envia ao Anki).

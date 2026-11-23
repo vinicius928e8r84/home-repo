@@ -1,0 +1,16 @@
+{
+  "Nova-AI": {
+    "short": "nova",
+    "path": "~/Nova-AI",
+    "remote": "https://github.com/vinicius928e8r84/Nova-AI",
+    "default_branch": "main",
+    "branch": "agent/pi/{task}-{date}"
+  },
+  "PerpetualMiner": {
+    "short": "pm",
+    "path": "~/PerpetualMiner",
+    "remote": "https://github.com/vinicius928e8r84/PerpetualMiner",
+    "default_branch": "main",
+    "branch": "pi/{task}"
+  }
+}
