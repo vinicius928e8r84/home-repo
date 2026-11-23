@@ -2,9 +2,8 @@ import { readFileSync } from 'node:fs';
 import globals from 'globals';
 import tsParser from '@typescript-eslint/parser';
 
-const ignorar = JSON.parse(readFileSync(new URL('./ignorar.json', import.meta.url), 'utf8'))
-  .filter(item => item.ferramentas.includes('eslint'))
-  .map(item => item.glob);
+const ignorar = JSON.parse(readFileSync(new URL('./excecoes.json', import.meta.url), 'utf8'))
+  .eslint.map(item => item.glob);
 
 const correcao = {
   'no-undef': 'error',
