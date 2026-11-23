@@ -291,7 +291,7 @@ def cmd_spawn(a):
             raise Fail("pane", "Herdr did not return a pane id")
         meta["pane"] = pane
         write_meta(meta)
-        herdr("agent", "pane", "run", pane, 'pi -e "%s" --model %s:%s' % (posix(EXTENSION), model, level))
+        herdr("agent", "pane", "run", pane, 'pi --approve -e "%s" --model %s:%s' % (posix(EXTENSION), model, level))
         deadline = time.time() + a.start_timeout
         while file_state(meta["state_file"]).get("state") != "idle":
             if time.time() > deadline:
