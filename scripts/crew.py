@@ -36,8 +36,9 @@ CURSOR = os.path.join(STATE, "events.cursor")
 HEARTBEAT = os.path.join(STATE, "watch.heartbeat")
 DECISIONS = os.path.join(STATE, "decisions.jsonl")
 NOTIFIED = os.path.join(STATE, "notify.cursor")
-NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed"}
+NOTIFY = {"turn_ended", "report_written", "merged", "stalled", "gone", "decision_needed", "spawn_failed", "never_started"}
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
+UNSTARTED_MINUTES = 4  # a worker idle with 0 turns for this long never started (spawn itself waits at most ~2.5 min)
 
 
 class Fail(Exception):
@@ -286,6 +287,23 @@ Escreva para quem não acompanhou o trabalho: frases completas, sem siglas que v
 """
 
 
+def deliver_brief(meta, pane, wait, tries=3):
+    """Send the first message and wait for Pi to start the turn; Herdr sometimes drops it. Retry 2 only presses Enter
+    (the text may be typed already), retry 3 types it again."""
+    for attempt in range(tries):
+        if attempt == 1:
+            herdr("prompt", "pane", "send-keys", pane, "enter")
+        else:
+            send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
+        deadline = time.time() + wait
+        while time.time() < deadline:
+            seen = file_state(meta["state_file"])
+            if seen.get("state") == "working" or seen.get("turns", 0) > 0:
+                return attempt + 1
+            time.sleep(1)
+    raise Fail("prompt", "Pi did not start after %d sends of the brief (%ds each): the pane is open but idle" % (tries, wait))
+
+
 def cmd_spawn(a):
     repos = load("repos.json")
     repo = repos.get(a.repo)
@@ -350,7 +368,7 @@ def cmd_spawn(a):
                 tail = " | ".join(line.strip() for line in str(screen).splitlines()[-6:] if line.strip())
                 raise Fail("agent", "Pi did not become ready in %ds; the pane shows: %s" % (a.start_timeout, tail))
             time.sleep(1)
-        send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
+        deliver_brief(meta, pane, a.prompt_timeout)
     except Fail as e:
         meta["error"] = dict(step=e.step, error=e.error)
         write_meta(meta)
@@ -362,10 +380,20 @@ def cmd_spawn(a):
     return dict(ok=True, watching=True, **meta)
 
 
-def snapshot(meta, fetch, stall_minutes=0):
+def minutes_since(stamp):
+    try:
+        then = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return 0
+    return (datetime.datetime.now(then.tzinfo) - then).total_seconds() / 60
+
+
+def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     state = worker_state(meta)
     seen = file_state(meta.get("state_file", ""))
     snap = dict(state=state, turns=seen.get("turns", 0), report=os.path.exists(meta["report"]), merged=False, stalled=False)
+    snap["unstarted"] = bool(state in ("idle", "starting") and snap["turns"] == 0 and not meta.get("error")
+                             and minutes_since(meta.get("started")) > unstarted_minutes)
     if fetch:
         subprocess.run(["git", "-C", meta["repo_path"], "fetch", "--quiet", "origin"], capture_output=True)
     head = subprocess.run(["git", "-C", meta["repo_path"], "rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
@@ -378,7 +406,7 @@ def snapshot(meta, fetch, stall_minutes=0):
     return snap
 
 
-BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False)
+BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False, unstarted=False)
 
 
 def decisions():
@@ -510,7 +538,7 @@ def cmd_board(a):
         out.append("## Com problema (%d)" % len(trouble))
         for m in trouble:
             snap = m["_snap"]
-            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
+            why = ("erro ao abrir: %s" % m["error"]["error"]) if m.get("error") else "o painel fechou sem relatório" if snap["state"] == "gone" and not snap["report"] else "o painel fechou" if snap["state"] == "gone" else "o painel abriu mas o Pi nunca começou (0 turnos)" if snap["unstarted"] else "no mesmo turno há mais de 20 min" if snap["stalled"] else "parou sem relatório e sem pedir decisão"
             out.append("- **%s** [%s] %s" % (m["name"], m["repo"], why))
         out.append("")
     out.append("## Onde você parou em cada projeto")
@@ -640,7 +668,8 @@ def notice_cursor(total):
 
 def describe(event):
     text = {"turn_ended": "terminou um turno", "gone": "o painel fechou",
-            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais"}
+            "report_written": "escreveu o relatório", "spawn_failed": "não conseguiu abrir", "merged": "a branch entrou na base", "stalled": "está no mesmo turno há tempo demais",
+            "never_started": "o painel abriu mas o Pi nunca começou (0 turnos)"}
     if event["kind"] == "decision_needed":
         return "%s precisa de uma decisão do dono (%s)" % (event["worker"], event.get("id"))
     return "%s: %s" % (event["worker"], text.get(event["kind"], event["kind"]))
@@ -687,6 +716,7 @@ def cmd_watch(a):
     chief = a.chief
     herdr("herdr", "pane", "get", chief)
     loops, quiet_since = 0, time.time()
+    notice_cursor(len(read_events()))  # a first run starts from now, before this loop's own events
     print(json.dumps(dict(ok=True, watching=True, chief=chief, every=a.every, stall_minutes=a.stall)), flush=True)
     while True:
         os.makedirs(STATE, exist_ok=True)
@@ -706,7 +736,7 @@ def cmd_watch(a):
             name = meta["name"]
             seen_file = os.path.join(STATE, name, "watch.json")
             old = dict(BASELINE, **file_state(seen_file))
-            snap = snapshot(meta, loops % 15 == 0, a.stall)
+            snap = snapshot(meta, loops % 15 == 0, a.stall, a.unstarted)
             new = []
             if snap["turns"] > old["turns"]:
                 new.append(emit("turn_ended", name, turns=snap["turns"]))
@@ -718,6 +748,8 @@ def cmd_watch(a):
                 new.append(emit("merged", name, branch=meta["branch"]))
             if snap["stalled"] and not old["stalled"]:
                 new.append(emit("stalled", name, minutes=a.stall))
+            if snap["unstarted"] and not old["unstarted"]:
+                new.append(emit("never_started", name, minutes=a.unstarted))
             write_text(seen_file, json.dumps(snap))
             for event in new:
                 print(json.dumps(event, ensure_ascii=False), flush=True)
@@ -744,6 +776,7 @@ def main():
     s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
     s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
     s.add_argument("--start-timeout", type=int, default=90, help="seconds to wait for Pi to be ready")
+    s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the brief")
     s.add_argument("--dry-run", action="store_true", help="print the plan; create nothing")
     s.set_defaults(fn=cmd_spawn)
     s = sub.add_parser("board", help="the whole fleet in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
@@ -781,6 +814,7 @@ def main():
     s.add_argument("--chief", help="pane to notify; given, the watch loop runs in this process")
     s.add_argument("--every", type=int, default=20, help="seconds between checks")
     s.add_argument("--stall", type=int, default=20, help="minutes one turn may run before it counts as stalled")
+    s.add_argument("--unstarted", type=int, default=UNSTARTED_MINUTES, help="minutes a worker may sit at 0 turns before it counts as never started")
     s.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_watch)
     a = p.parse_args()
