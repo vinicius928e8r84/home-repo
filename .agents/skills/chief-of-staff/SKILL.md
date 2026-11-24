@@ -35,6 +35,7 @@ This harness has no subagent tool. A subagent is a **worker**: a Pi agent in its
   2. **Pronto para revisar**: the worker's result line, and what you need from the user (review, merge, close).
   3. **Rodando**: one line per worker.
 - **Decisions are records, never chat.** A worker records its own with `ask`. A decision you need from the user yourself goes there too: `ask "..." --recommend "..." --repo <repo>`. When the user answers, run `answer <id> "..."`: it records the answer and delivers it to the worker. A decision leaves the board only by being answered.
+- **Questions to you.** A worker asks you with `ask ... --para chief` (id `P3`): it reaches your inbox at once and never the user's board block. Answer with `answer P3 "..."`. If only the user can decide, record it yourself with `ask ... --para dono --repo <repo>`. A worker's `tell chief "..."` is a notice with no answer.
 - **Steer**: `tell <name> "message"` reaches a worker mid-turn.
 - **Close**: `close <name>` once the worker's branch is merged.
 - **Failure**: a command that fails prints the step that failed. Tell the user; fix the cause before retrying.

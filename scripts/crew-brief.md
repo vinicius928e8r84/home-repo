@@ -22,13 +22,21 @@ Só isso conta como pronto. Verifique rodando de verdade (teste, comando, leitur
 - Skills: os do repo ficam em `.claude/skills/` e `.agents/skills/` desta pasta; os gerais em `{home}/.agents/skills/`. Leia o `SKILL.md` do que a tarefa pedir, como arquivo.
 - Faça commits pequenos nesta branch. Push, merge e PR só se o pedido mandar.
 
-## Decisão que cabe ao dono
+## Perguntas e decisões
 
-Escopo, gasto, algo irreversível, ou duas saídas boas entre as quais só ele escolhe: registre a pergunta, com a sua recomendação, e siga com tudo o que não depende dela.
+Dúvida de trabalho (qual abordagem, o que o pedido quis dizer, algo que o chief sabe): pergunte ao chief. A pergunta vai para a caixa dele e nunca para o dono.
 
 ```
-python "{home}/scripts/crew.py" ask "a pergunta, com o contexto que ele precisa para responder sem abrir o código" --recommend "o que você faria e por quê"
+python "{home}/scripts/crew.py" ask "a pergunta, com o contexto que o chief precisa para responder sem abrir o código" --recommend "o que você faria e por quê" --para chief
 ```
+
+Escopo, gasto, algo irreversível, ou duas saídas boas entre as quais só o dono escolhe: registre a decisão, com a sua recomendação.
+
+```
+python "{home}/scripts/crew.py" ask "a pergunta, com o contexto que ele precisa para responder sem abrir o código" --recommend "o que você faria e por quê" --para dono
+```
+
+Siga com tudo o que não depende da resposta. Para só avisar o chief, sem esperar resposta: `python "{home}/scripts/crew.py" tell chief "o aviso"`.
 
 A resposta chega como uma mensagem começando com `[chief]`. Toda mensagem `[chief]` vem do orquestrador e tem prioridade sobre o que você está fazendo.
 
