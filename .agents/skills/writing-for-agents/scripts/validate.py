@@ -18,7 +18,7 @@ USO = """validate.py <skill dir>...  check a skill before calling it done.
 Errors (exit 1): missing or malformed frontmatter, name not equal to the folder or not kebab-case,
 description missing or over 1024 characters, a relative file the skill points at that does not exist,
 a cited skill path (~/.agents/skills/<name>/..., ~/.pi/agent/skills/<name>/...) that does not resolve.
-Warnings (exit 0): tools and paths this fleet does not have (Task or Skill tool, AskQuestion, ~/.cursor,
+Warnings (exit 0): tools and paths this Time does not have (Task or Skill tool, AskQuestion, ~/.cursor,
 /tmp/apiw), a SKILL.md over 500 lines, a reference file over 300 lines without a table of contents.
 """
 
