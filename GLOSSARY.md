@@ -56,10 +56,14 @@ O texto que um Worker escreve ao fim da sua Tarefa: o que fez, o que achou e o q
 _Avoid_: report, resumo
 O código ainda usa `report`; renomear aos poucos.
 
+**Mesa**:
+O que o Dono vê numa olhada: a cota da conta, as máquinas, cada Frente com o estado, o próximo passo e quem ela espera, os Workers parados com a causa, e as Decisões para responder ali mesmo.
+_Avoid_: dashboard, painel, visão geral
+
 **Quadro**:
-A visão de uma vez só: Decisões abertas, Tarefas rodando, PRs prontas para revisar e onde cada repo parou.
-_Avoid_: board, dashboard, bearings
-O código ainda usa `board`; renomear aos poucos.
+Um recorte da Mesa, como o Quadro de uma Frente.
+_Avoid_: board, bearings
+O código ainda usa `board` para o texto do `crew.py board`, que mostra tudo de uma vez; o que ele vira fica para a spec.
 
 **Rodada**:
 Uma sessão de grilling numa página lavish: perguntas ao Dono, cada uma com a recomendação, respondidas de uma vez.
