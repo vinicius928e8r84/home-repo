@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Reference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.
 
-When the document you're writing is a skill, read [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md) for frontmatter, invocation choice, router skills, and where a skill lives in this fleet.
+When the document you're writing is a skill, read [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md) for frontmatter, invocation choice, router skills, and where a skill lives in this Time.
 
 When you are creating a skill, changing one substantially, or tuning a description that does not trigger, follow [`WORKFLOW.md`](WORKFLOW.md): capture intent, draft, validate, test, iterate. Run `scripts/validate.py` on the skill before calling it done.
 

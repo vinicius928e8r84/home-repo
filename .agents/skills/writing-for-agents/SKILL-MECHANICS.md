@@ -25,14 +25,14 @@ When user-invoked skills multiply past what you can remember, that piled-up cogn
 
 - `name`: lowercase letters, digits and single hyphens, at most 64 characters, equal to the folder name.
 - `description`: non-empty, at most 1024 characters, third person, saying what the skill does and when to reach for it. All "when to use" belongs here, not in the body, because the body is only read after the skill fires.
-- `disable-model-invocation: true` for a user-invoked skill. Put it as the first frontmatter line; `scripts/validate.py` does not care about order, but the fleet's hide tooling does.
+- `disable-model-invocation: true` for a user-invoked skill. Put it as the first frontmatter line; `scripts/validate.py` does not care about order, but the Time's hide tooling does.
 - Quote a `description` that contains a colon, or use `description: >-` with indented continuation lines, so it stays one YAML scalar.
 
 ## Description
 
 A model-invoked description is the skill's only trigger, so write it to fire. State the outcome in the leading words, then list the distinct situations that should reach the skill, using the phrases the owner and the briefs actually use. Agents tend to under-trigger skills, so lean toward naming the borderline situations that belong to a branch. The pruning rule still holds: one trigger per branch, no synonym for a branch already named, no identity the body already carries.
 
-## Where a skill lives in this fleet
+## Where a skill lives in this Time
 
 Every skill belongs to exactly one of three classes. Pick the class before writing the file.
 
