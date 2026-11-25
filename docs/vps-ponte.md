@@ -14,7 +14,7 @@ Os demais comandos vão direto ao binário do crew. O script também põe uma li
 
 ## Instalar
 
-Na VPS: `ssh vps bash -s < scripts/vps-ponte.sh` (idempotente).
+Na VPS: `ssh vps bash -s < scripts/vps-ponte.sh` (idempotente). O `scripts/vps-setup.sh` também roda, depois de buscar os repos, o `vps-ponte.sh` da `origin/main` do clone `~/home-repo`.
 
 No PC, em `~/.ssh/config`:
 

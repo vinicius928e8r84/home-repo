@@ -21,6 +21,10 @@ function resumeCommand(args: string[], env: Record<string, string | undefined>, 
   return command.some((word) => /['\u0000-\u001f]/.test(word)) ? undefined : command;
 }
 
+function sessionFileOf(ctx: any): string | undefined {
+  return ctx?.sessionManager?.getSessionFile?.();
+}
+
 function withoutBreakingTheSession(action: () => void): void {
   try {
     action();
@@ -86,7 +90,7 @@ export default function (pi: any) {
       file = path.join(dir, "_chief", `${pane.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
       name = "chief";
     }
-    sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    sessionFile = sessionFileOf(ctx);
     write("idle");
   });
   pi.on("agent_start", async () => write("working"));
