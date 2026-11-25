@@ -25,6 +25,10 @@ O código ainda usa `watch`/`watcher`; renomear aos poucos.
 
 ## Trabalho
 
+**Frente**:
+Um trabalho grande com um destino, que pede mais de uma Tarefa e pode cruzar repos. Pode ter um mapa do wayfinder, e todo mapa é de uma Frente; uma Tarefa pertence a uma Frente ou a nenhuma.
+_Avoid_: projeto, esforço, épico, iniciativa
+
 **Tarefa**:
 Um pedido com critério de pronto, entregue a um Worker. Termina em PR, Relatório ou nada.
 _Avoid_: job, ticket (ticket é a issue do repo)
@@ -50,11 +54,12 @@ _Avoid_: formulário, questionário
 **Repo de trabalho**:
 O repo de que uma Tarefa trata. É lá que ficam spec, ADR, glossário e issues dela.
 _Avoid_: projeto (quando se quer dizer o repo)
+O código ainda usa `projeto` (no `board`); renomear aos poucos.
 
 ## Memória e contexto
 
 **Wiki**:
-A memória pessoal do Dono: preferências, trabalho fora do código e o que cruza repos. O que é de um projeto não entra.
+A memória pessoal do Dono: preferências, trabalho fora do código e o que cruza repos. O que é de um Repo de trabalho não entra.
 _Avoid_: notas, memória do chief
 
 **Smart zone**:
