@@ -4,7 +4,7 @@ Each worker is a Pi agent in its own Herdr tab, working in its own git
 worktree, started with written instructions (the brief). Run this from the
 chief's pane inside Herdr.
 
-  python scripts/crew.py board                      the whole fleet: decisions waiting, running, to review
+  python scripts/crew.py board                      the whole Time: decisions waiting, running, to review
   python scripts/crew.py spawn <repo> <task> --type implement --request "..." --done "..."
   python scripts/crew.py spawn <repo> <task> --host vps ...   (the worker runs on that ssh host: scripts/crew_remote.py)
   python scripts/crew.py ask "question" --recommend "..." --para chief|dono   (a worker asks the chief or the owner)
@@ -519,7 +519,7 @@ def cmd_board(a):
         slim = lambda m: dict(name=m["name"], repo=m["repo"], type=m["type"], task=m["task"], state=m["_snap"]["state"], result=m["_result"], report=m["report"], branch=m["branch"], merged=m["_snap"]["merged"])
         return dict(ok=True, decisions=open_decisions, questions=module("crew_conversa").open_questions(open_all), running=[slim(m) for m in running], review=[slim(m) for m in review], trouble=[slim(m) for m in trouble])
 
-    out = ["# Frota: %s" % datetime.datetime.now().strftime("%d/%m %H:%M"), ""]
+    out = ["# Time: %s" % datetime.datetime.now().strftime("%d/%m %H:%M"), ""]
     out += module("crew_conversa").questions_lines(open_all)
     out.append("## Decisões esperando por você (%d)" % len(open_decisions))
     for d in sorted(open_decisions, key=lambda d: d["at"]):
@@ -550,7 +550,7 @@ def cmd_board(a):
     for repo in sorted(load("repos.json")):
         mine = [m for m in everyone if m["repo"] == repo]
         if not mine:
-            out.append("- **%s**: nenhum trabalho da frota ainda." % repo)
+            out.append("- **%s**: nenhum trabalho do Time ainda." % repo)
             continue
         live = [m for m in mine if not m.get("closed")]
         done = sorted((m for m in mine if m.get("closed")), key=lambda m: m["closed"])
@@ -822,7 +822,7 @@ def main():
     s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the brief")
     s.add_argument("--dry-run", action="store_true", help="print the plan; create nothing")
     s.set_defaults(fn=cmd_spawn)
-    s = sub.add_parser("board", help="the whole fleet in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
+    s = sub.add_parser("board", help="the whole Time in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
     s.add_argument("--json", action="store_true", help="machine-readable instead of the text board")
     s.set_defaults(fn=cmd_board)
     s = sub.add_parser("ask", help="a worker asks the chief (default) or records a decision for the owner (--para dono), and keeps working")
