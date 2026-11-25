@@ -40,6 +40,19 @@ fi
 "$HERDR" --version
 
 step "systemd user service crew-herdr (session $SESSION)"
+cat > "$CREW_HOME/bin/crew-herdr-run" <<'EOF'
+#!/usr/bin/env bash
+herdr="$1"
+session="$2"
+told=0
+while "$herdr" --session "$session" status server 2>/dev/null | grep -q 'status: running'; do
+  [ "$told" = 1 ] || echo "herdr session $session is served from outside this unit; waiting for it to stop"
+  told=1
+  sleep 5
+done
+exec "$herdr" --session "$session" server
+EOF
+chmod +x "$CREW_HOME/bin/crew-herdr-run"
 cat > "$HOME/.config/systemd/user/crew-herdr.service" <<EOF
 [Unit]
 Description=Herdr headless server for crew workers (session $SESSION)
@@ -49,8 +62,7 @@ Type=simple
 Environment=PATH=$CREW_HOME/bin:$HOME/.local/bin:/opt/factory/toolchain/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HERDR_SESSION=$SESSION
 WorkingDirectory=$HOME
-ExecStart=$HERDR --session $SESSION server
-ExecStop=$HERDR --session $SESSION server stop
+ExecStart=$CREW_HOME/bin/crew-herdr-run $HERDR $SESSION
 Restart=on-failure
 RestartSec=5
 
