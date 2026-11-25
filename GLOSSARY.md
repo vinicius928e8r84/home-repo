@@ -51,6 +51,10 @@ _Avoid_: formulário, questionário
 O repo de que uma Tarefa trata. É lá que ficam spec, ADR, glossário e issues dela.
 _Avoid_: projeto (quando se quer dizer o repo)
 
+**Retomada**:
+Reabrir um Chief ou Worker que parou, na mesma conversa, e dizer a ele por que parou.
+_Avoid_: resume, restore, relaunch, revive, reabertura
+
 ## Memória e contexto
 
 **Wiki**:
