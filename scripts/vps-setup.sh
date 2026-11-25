@@ -120,6 +120,9 @@ clone_or_fetch "$HOME/home-repo" home-repo
 clone_or_fetch "$HOME/Nova-AI" Nova-AI
 clone_or_fetch "$HOME/PerpetualMiner" PerpetualMiner
 
+step "herdr bridge for the PC machine (scripts/vps-ponte.sh from origin/main)"
+git -C "$HOME/home-repo" show origin/main:scripts/vps-ponte.sh | CREW_HOME="$CREW_HOME" bash
+
 step "pi answers through $MODEL"
 reply="$(cd "$HOME" && timeout 180 "$PI" --model "$MODEL" -p 'Reply with exactly the word: pong' </dev/null 2>&1 | tail -5)"
 echo "$reply"
