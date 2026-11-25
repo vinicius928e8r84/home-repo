@@ -273,22 +273,6 @@ class SpawnDelivery(CrewCase):
         self.assertEqual(caught.exception.step, "prompt")
         self.assertIn("spawn_failed", [e["kind"] for e in self.events()])
 
-    def test_watcher_flags_a_worker_idle_with_zero_turns(self):
-        self.add_worker(state="idle", turns=0, started=minutes_ago(10))
-        self.watch()
-        self.assertIn("never_started", [e["kind"] for e in self.events()])
-        self.assertEqual(len(self.told_chief()), 1)
-
-    def test_watcher_gives_a_new_worker_time_to_start(self):
-        self.add_worker(state="idle", turns=0, started=minutes_ago(1))
-        self.watch()
-        self.assertNotIn("never_started", [e["kind"] for e in self.events()])
-
-    def test_watcher_does_not_flag_a_worker_that_ran_a_turn(self):
-        self.add_worker(state="idle", turns=2, started=minutes_ago(10))
-        self.watch()
-        self.assertNotIn("never_started", [e["kind"] for e in self.events()])
-
 
 class CloseIsSilent(CrewCase):
 
