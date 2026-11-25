@@ -23,7 +23,6 @@ exits 1.
 """
 import argparse
 import datetime
-import hashlib
 import importlib.util
 import json
 import os
@@ -405,30 +404,7 @@ def has_own_commit(meta):
 
 
 def progress_mark(meta):
-    head = subprocess.run(git_argv(meta) + ["rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
-    try:
-        screen = str(herdr("agent", "pane", "read", meta["pane"], "--source", "recent-unwrapped", "--lines", "40"))
-    except (Fail, KeyError):
-        screen = ""
-    screen = re.sub(r"[\u2800-\u28ff]", "", screen)
-    screen = re.sub(r"^.*Elapsed.*$", "", screen, flags=re.M)
-    return head + chr(10) + screen
-
-
-def progress_since(meta, seen):
-    mark = hashlib.sha1(progress_mark(meta).encode("utf-8", "replace")).hexdigest()
-    last = file_state(os.path.join(STATE, meta["name"], "watch.json")).get("progress")
-    if not last:
-        return dict(mark=mark, at=seen["at"])
-    return last if last["mark"] == mark else dict(mark=mark, at=now())
-
-
-def quiet_minutes(meta, seen, progress):
-    mine = [d for d in decisions().values() if d.get("worker") == meta["name"]]
-    if any(d.get("status") == "open" for d in mine):
-        return 0
-    answered = [minutes_since(d["answered_at"]) for d in mine if d.get("answered_at")]
-    return min([minutes_since(seen["at"]), minutes_since(progress["at"])] + answered)
+    return module("crew_alarmes").marca(meta)
 
 
 def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
@@ -436,8 +412,9 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     seen = file_state(meta.get("state_file", ""))
     snap = dict(state=state, turns=seen.get("turns", 0), report=os.path.exists(meta["report"]), merged=False, stalled=False,
                 agent=agent, not_pi=bool(agent and agent != "pi"))
-    snap["unstarted"] = bool(state in ("idle", "starting") and snap["turns"] == 0 and not meta.get("error")
-                             and minutes_since(meta.get("started")) > unstarted_minutes)
+    before = file_state(os.path.join(STATE, meta["name"], "watch.json"))
+    snap["had_turn"] = bool(snap["turns"] or before.get("turns") or before.get("had_turn"))
+    snap["unstarted"] = module("crew_alarmes").nunca_comecou(meta, dict(seen, state=state), before, unstarted_minutes)
     if fetch:
         subprocess.run(git_argv(meta) + ["fetch", "--quiet", "origin"], capture_output=True)
     head = subprocess.run(git_argv(meta) + ["rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()
@@ -445,8 +422,7 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
         merged = subprocess.run(git_argv(meta) + ["merge-base", "--is-ancestor", head, meta["base"]], capture_output=True)
         snap["merged"] = merged.returncode == 0
     if state == "working" and stall_minutes and seen.get("at"):
-        snap["progress"] = progress_since(meta, seen)
-        snap["stalled"] = quiet_minutes(meta, seen, snap["progress"]) > stall_minutes
+        snap.update(module("crew_alarmes").avaliar(meta, seen, stall_minutes))
     return snap
 
 
