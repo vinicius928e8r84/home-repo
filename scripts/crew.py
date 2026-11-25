@@ -414,7 +414,7 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
                 agent=agent, not_pi=bool(agent and agent != "pi"))
     before = file_state(os.path.join(STATE, meta["name"], "watch.json"))
     snap["had_turn"] = bool(snap["turns"] or before.get("turns") or before.get("had_turn"))
-    snap["unstarted"] = module("crew_alarmes").nunca_comecou(meta, state, seen, before, unstarted_minutes)
+    snap["unstarted"] = module("crew_alarmes").nunca_comecou(meta, dict(seen, state=state), before, unstarted_minutes)
     if fetch:
         subprocess.run(git_argv(meta) + ["fetch", "--quiet", "origin"], capture_output=True)
     head = subprocess.run(git_argv(meta) + ["rev-parse", meta["branch"]], capture_output=True, text=True).stdout.strip()

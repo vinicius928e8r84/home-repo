@@ -147,6 +147,7 @@ class CrewCase(unittest.TestCase):
         self.crew.herdr = self.herdr
         self.crew.start_watcher = lambda *a, **k: 0
         self.crew.watcher_alive = lambda: True
+        self.crew.module("crew_firstmate").ler_recibos = lambda: dict(handled=[], pending=[], replies=[])
 
     def make_repo(self):
         origin = os.path.join(self.tmp, "origin.git")

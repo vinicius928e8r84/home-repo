@@ -72,10 +72,10 @@ def avaliar(meta, seen, minutos):
     return dict(progress=andamento, stalled=quieto and not folgado)
 
 
-def nunca_comecou(meta, state, seen, antes, minutos):
+def nunca_comecou(meta, seen, antes, minutos):
     if seen.get("turns", 0) or antes.get("turns", 0) or antes.get("had_turn") or meta.get("error"):
         return False
-    if state not in ("idle", "starting"):
+    if seen.get("state") not in ("idle", "starting"):
         return False
     idades = [crew.minutes_since(meta.get("started"))]
     if seen.get("at"):

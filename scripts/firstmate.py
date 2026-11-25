@@ -33,13 +33,13 @@ def ssh_cmd():
     return [shutil.which("ssh") or "ssh"]
 
 
-def call(remote, stdin=None):
+def call(remote, stdin=None, timeout=60):
     cmd = ssh_cmd() + ["-o", "ConnectTimeout=8", "-o", "BatchMode=yes", HOST, remote]
     data = stdin.encode("utf-8") if stdin is not None else None
     try:
-        out = subprocess.run(cmd, input=data, capture_output=True, timeout=60)
+        out = subprocess.run(cmd, input=data, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return 1, "", "error: the VPS did not answer in 60 s\n"
+        return 1, "", "error: the VPS did not answer in %d s\n" % timeout
     return out.returncode, out.stdout.decode("utf-8", "replace"), out.stderr.decode("utf-8", "replace")
 
 

@@ -6,10 +6,12 @@ crew = None
 
 RESUMO_MINUTOS = 30
 TITULO_MAXIMO = 80
+RESPOSTA_MAXIMA = 1500
 ACORDAM = {
     "erro": {"spawn_failed", "never_started", "not_pi", "gone"},
     "parado": {"stalled"},
     "pedido": {"decision_needed", "question_for_chief"},
+    "resposta do firstmate": {"firstmate_reply"},
     "PR pronta para revisão": {"pr_ready_review"},
     "PR pronta para merge": {"pr_ready_merge"},
     "branch mesclada": {"merged"},
@@ -99,6 +101,8 @@ def texto(evento):
             evento["worker"], evento.get("agent"))
     if tipo in ("decision_needed", "question_for_chief"):
         return texto_do_pedido(evento)
+    if tipo == "firstmate_reply":
+        return "respondeu à nota «%s»: %s" % (" ".join(evento.get("note", "").split())[:TITULO_MAXIMO], " ".join(evento.get("reply", "").split())[:RESPOSTA_MAXIMA])
     if tipo.startswith("pr_ready"):
         return "%s#%s «%s» (%s)" % (evento.get("repo"), evento.get("number"), evento.get("title"), evento["worker"])
     return "%s: %s" % (evento["worker"], TEXTOS.get(tipo, tipo))
@@ -160,6 +164,7 @@ def resumir(chief, eventos, minutos, sem_pr):
 def rodada(chief, minutos=RESUMO_MINUTOS):
     prs = crew.module("crew_prs")
     prs.refresh()
+    crew.module("crew_firstmate").refresh()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))
     sem_pr = sem_pr_esperada()
