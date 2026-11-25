@@ -21,7 +21,7 @@ _Avoid_: crewmate, subagente, tripulante
 **Time**:
 O Chief e os agentes que ele comanda: hoje os Workers, um dia também gerentes com os Workers deles. O Firstmate da VPS tem o seu próprio Time.
 _Avoid_: frota, fleet, crew, tripulação
-O código ainda usa `frota` e `fleet`; a troca vai numa PR própria.
+O código já diz Time; `crew.py`, `state/crew/`, a sessão `crew` e a unidade `crew-herdr` ainda carregam o nome antigo (#50).
 O grupo de um gerente: o Dono falou em equipe do gerente; sem nome fixo até haver gerentes.
 
 **Vigia**:
