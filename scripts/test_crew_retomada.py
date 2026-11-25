@@ -10,6 +10,7 @@ SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPTS)
 EXTENSION = os.path.join(ROOT, ".pi", "extensions", "crew-state.ts")
 BASH = shutil.which("bash")
+NODE = shutil.which("node")
 PONTE = os.path.join(SCRIPTS, "vps-ponte.sh").replace("\\", "/")
 
 HARNESS = '''import cp from "node:child_process";
@@ -63,14 +64,14 @@ class Retomada(unittest.TestCase):
             PI_CWD=self.tmp,
             PI_SESSION=session,
         )
-        done = subprocess.run(["node", harness], env=env, capture_output=True, text=True, timeout=60)
+        done = subprocess.run([NODE, harness], env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
         return json.loads(done.stdout.strip().splitlines()[-1]), session
 
     def resumes(self, calls):
         return [call for call in calls if "--source" in call and call[call.index("--source") + 1] == "herdr:pi"]
 
-    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    @unittest.skipUnless(NODE, "node is not installed")
     def test_the_resume_command_carries_env_extension_model_and_session(self):
         calls, session = self.run_extension(["--approve", "-e", "/crew/crew-state.ts", "--model", "claude/haiku:low", "--session", "/velha.jsonl"])
         resumes = self.resumes(calls)
@@ -87,7 +88,7 @@ class Retomada(unittest.TestCase):
         words = command[command.index("pi"):]
         self.assertEqual(words, ["pi", "--approve", "-e", "/crew/crew-state.ts", "--model", "claude/haiku:low", "--session", session])
 
-    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    @unittest.skipUnless(NODE, "node is not installed")
     def test_the_resume_report_follows_the_crew_report_and_its_seq_only_grows(self):
         calls, _ = self.run_extension(["--approve"])
         order = [call[call.index("--source") + 1] for call in calls if "--source" in call]
@@ -96,12 +97,12 @@ class Retomada(unittest.TestCase):
         self.assertEqual(seqs, sorted(set(seqs)))
         self.assertGreater(seqs[0], 10 ** 15)
 
-    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    @unittest.skipUnless(NODE, "node is not installed")
     def test_no_resume_before_the_session_file_exists(self):
         calls, _ = self.run_extension(["--approve"], session_exists=False)
         self.assertEqual(self.resumes(calls), [])
 
-    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    @unittest.skipUnless(NODE, "node is not installed")
     def test_no_resume_when_an_argument_would_break_herdr(self):
         calls, _ = self.run_extension(["--approve", "--model", "it's"])
         self.assertEqual(self.resumes(calls), [])
