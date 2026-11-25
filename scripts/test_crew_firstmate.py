@@ -1,5 +1,3 @@
-import json
-import os
 import unittest
 
 from scripts.test_crew_vigia import VigiaCase
