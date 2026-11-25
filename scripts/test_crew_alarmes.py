@@ -14,6 +14,10 @@ def rodando(comando):
     return "\n $ %s (timeout 2000s)\n\n Elapsed 25m 16s\n\n\n%s%s" % (comando, FAIXA, RODAPE)
 
 
+def rodando_com_saida(comando, saida):
+    return "\n $ %s\n\n %s\n\n Elapsed 25m 16s\n\n\n%s%s" % (comando, "\n ".join(saida), FAIXA, RODAPE)
+
+
 def terminado(comando):
     return "\n $ %s\n\n Took 4.1s\n\n\n%s%s" % (comando, FAIXA, RODAPE)
 
@@ -42,6 +46,13 @@ class Parado(CrewCase):
 
     def test_esperar_o_dono_na_pagina_do_lavish_nao_e_parado(self):
         self.assertFalse(self.parado_com_a_tela(rodando("npx -y lavish-axi poll .lavish/plano.html 2>&1 | tail -25")))
+
+    def test_espera_que_ja_imprimiu_algo_nao_e_parada(self):
+        saida = ["... (12 earlier lines, ctrl+o to expand)", "build  pending  0", "test   pending  0"]
+        self.assertFalse(self.parado_com_a_tela(rodando_com_saida("gh pr checks 21 --watch", saida)))
+
+    def test_comando_travado_com_saida_continua_parado(self):
+        self.assertTrue(self.parado_com_a_tela(rodando_com_saida("python -m unittest discover", ["Ran 3 tests"])))
 
     def test_comando_travado_que_nao_e_espera_continua_parado(self):
         self.assertTrue(self.parado_com_a_tela(rodando("python -m unittest discover")))

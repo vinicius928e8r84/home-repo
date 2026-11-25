@@ -11,6 +11,7 @@ CRONOMETRO = re.compile(r"^.*Elapsed.*$", re.M)
 FAIXA_DE_TURNO = re.compile(r"^\u2500+ [\u2800-\u28ff] \w+ \u2500+\s*$", re.M)
 ESPERA = re.compile(r"\bsleep\b|\bgh\s+pr\s+checks\b|\bgh\s+run\s+watch\b|--watch\b|\blavish", re.I)
 INICIO_DE_COMANDO = " $ "
+SITUACAO = re.compile(r"^(Elapsed|Took) ")
 
 
 def ler_tela(meta):
@@ -36,8 +37,8 @@ def comando_rodando(tela):
         if not linha.strip():
             break
         bloco.append(linha.strip())
-    depois = [linha.strip() for linha in linhas[inicios[-1] + len(bloco):] if linha.strip()]
-    return " ".join(bloco) if depois and depois[0].startswith("Elapsed") else ""
+    situacao = [linha.strip() for linha in linhas[inicios[-1] + len(bloco):] if SITUACAO.match(linha.strip())]
+    return " ".join(bloco) if situacao and situacao[-1].startswith("Elapsed") else ""
 
 
 def espera_legitima(tela):
