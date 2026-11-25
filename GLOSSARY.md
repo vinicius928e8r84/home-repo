@@ -54,8 +54,8 @@ _Avoid_: dashboard, painel, visão geral
 
 **Quadro**:
 Um recorte da Mesa, como o Quadro de uma Frente.
-_Avoid_: board, dashboard, bearings
-O código ainda chama de Quadro o texto do `crew.py board`, que mostra tudo de uma vez; o que ele vira fica para a spec.
+_Avoid_: board, bearings
+O código ainda usa `board` para o texto do `crew.py board`, que mostra tudo de uma vez; o que ele vira fica para a spec.
 
 **Rodada**:
 Uma sessão de grilling numa página lavish: perguntas ao Dono, cada uma com a recomendação, respondidas de uma vez.
