@@ -22,6 +22,7 @@ _Avoid_: crewmate, subagente, tripulante
 O Chief e os agentes que ele comanda: hoje os Workers, um dia também gerentes com os Workers deles. O Firstmate da VPS tem o seu próprio Time.
 _Avoid_: frota, fleet, crew, tripulação
 O código ainda usa `frota` e `fleet`; a troca vai numa PR própria.
+O grupo de um gerente: o Dono falou em equipe do gerente; sem nome fixo até haver gerentes.
 
 **Vigia**:
 O que observa os Workers e avisa o Chief quando algo muda.
