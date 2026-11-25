@@ -21,7 +21,7 @@ Crie uma issue no GitHub.
 
 Rode `gh issue view <n> --comments`.
 
-## Operações do wayfinder
+## Operações do wayfinder (Wayfinding operations)
 
 Usadas pelo skill `wayfinder`. O **mapa** é uma issue só, com as **issues filhas** como tickets.
 
