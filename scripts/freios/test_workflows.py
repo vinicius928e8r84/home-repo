@@ -125,6 +125,38 @@ class WorkflowRegistroDaPr(unittest.TestCase):
         self.assertRegex(self.texto, r"(?m)^permissions:\n  contents: read\n  pull-requests: read$")
 
 
+class WorkflowReexecutarRegistro(unittest.TestCase):
+    def setUp(self):
+        self.texto = ler("reexecutar-registro-da-pr.yml")
+
+    def test_roda_quando_um_comentario_de_pr_e_criado_ou_editado(self):
+        self.assertRegex(self.texto, r"(?m)^  issue_comment:\n    types: \[created, edited\]$")
+        self.assertIn("github.event.issue.pull_request", self.texto)
+
+    def test_so_olha_comentario_de_quem_pode_registrar_e_que_traz_veredito(self):
+        quem = "contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
+        self.assertIn(quem, self.texto)
+        self.assertIn("contains(github.event.comment.body, 'Veredito:')", self.texto)
+
+    def test_roda_so_o_codigo_da_base_e_nao_passa_o_comentario_ao_shell(self):
+        self.assertNotIn("ref:", self.texto)
+        self.assertNotIn("pull_request.head", self.texto)
+        self.assertNotIn("github.event.comment.body }}", self.texto)
+        self.assertNotIn("github.head_ref", self.texto)
+        self.assertIn("PR: ${{ github.event.issue.number }}", self.texto)
+
+    def test_so_ganha_o_poder_de_reexecutar_run(self):
+        self.assertRegex(self.texto, r"(?m)^permissions:\n  actions: write\n  pull-requests: read$")
+        self.assertNotIn("contents:", self.texto)
+
+    def test_reexecuta_pelo_modulo_da_base(self):
+        self.assertIn("python -m scripts.freios.reexecutar_registro", self.texto)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", self.texto)
+
+    def test_o_nome_nao_se_confunde_com_o_check_exigido(self):
+        self.assertNotRegex(self.texto, r"(?m)^name: Registro da PR$")
+
+
 class ModeloDaPr(unittest.TestCase):
     def conferir(self, corpo):
         pr = Pr(corpo=corpo, head=HEAD, registros=[revisao(HEAD)], arquivos=["wiki/index.md"], autor="dono", repositorio=REPO)

@@ -32,8 +32,8 @@ O que está em comentário de HTML, em bloco de código ou em citação (>) não
    Risco: <BAIXA, MÉDIA ou ALTA: o risco que o revisor viu>
 
    Vale o registro mais recente com o head exato. Um commit novo muda o head: revise de novo. Se o revisor registrar
-   Risco: ALTA, a PR conta como ALTA mesmo com o corpo dizendo BAIXA ou MÉDIA. Um registro publicado como comentário
-   simples não roda o check de novo; publique como revisão:
+   Risco: ALTA, a PR conta como ALTA mesmo com o corpo dizendo BAIXA ou MÉDIA. Publicar ou editar o registro, como
+   comentário ou como revisão, roda o check de novo sozinho; para publicá-lo com o head lido do GitHub:
    python -m scripts.freios.registrar_na_pr revisao --pr <número> --head <SHA> --autor <quem> --revisor <quem> --risco baixa|media|alta --publicar
 
 4. Prova real, com atenção ALTA: a seção abaixo, com uma única linha Head: com o SHA inteiro e uma explicação de pelo menos
