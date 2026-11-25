@@ -2,7 +2,7 @@
 
 Pesquisa do ticket [Como o Pi e o Herdr reabrem um worker com a mesma conversa](https://github.com/vinicius928e8r84/home-repo/issues/29), do mapa [Frota e painel do home-repo](https://github.com/vinicius928e8r84/home-repo/issues/26). Feita em 25/11/2026 contra:
 
-- PC: Pi 1.6.0 (`%APPDATA%/npm/node_modules/@earendil-works/pi-coding-agent`), Herdr 0.9.5, integração pi do Herdr v9 (`~/.pi/agent/extensions/herdr-agent-state.ts`).
+- PC: Pi 1.6.0 (`%APPDATA%/npm/node_modules/@earendil-works/pi-coding-agent`; código na tag [`v1.6.0`](https://github.com/earendil-works/pi/tree/v1.6.0)), Herdr 0.9.5, integração pi do Herdr v9 (`~/.pi/agent/extensions/herdr-agent-state.ts`).
 - VPS: Pi 1.5.2, Herdr 0.9.1, integração pi do Herdr **não instalada** (`herdr integration status`).
 - Código do Herdr na tag [`v0.9.5`](https://github.com/herdrdev/herdr/tree/v0.9.5) e a doc dessa versão ([índice](https://herdr.dev/llms.txt)).
 
@@ -19,7 +19,7 @@ Os testes rodaram numa sessão Herdr à parte (`herdr --session crewtest server`
 
 ### `--session-id`
 
-Fonte: `docs/cli.md` (*Sessions*) e `dist/main.js` do Pi 1.6.0.
+Fonte: [`docs/cli.md` (*Sessions*)](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/cli.md#sessions) e `dist/main.js` do Pi 1.6.0 ([`src/main.ts`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/src/main.ts)).
 
 - `--session-id <id>`: "Opens the current directory's existing session with the ID, or creates it otherwise." O id aceita letras, números, `.`, `_` e `-` e tem de começar e terminar com letra ou número. Nomes como `home-pi-sessao-retomada` servem.
 - No código (`main.js`, perto da linha 383), o Pi procura o id só entre as sessões da pasta atual (`SessionManager.findById(cwd, …)`). Se acha, abre; se não, avisa `No project session found with id '<id>'; creating a new session with that id.` e cria.
@@ -31,13 +31,13 @@ Fonte: `docs/cli.md` (*Sessions*) e `dist/main.js` do Pi 1.6.0.
 
 ### O que volta da sessão
 
-- **Modelo e raciocínio voltam.** "A session records model and thinking-level changes. Resuming the session restores them" (`docs/models.md`). No código, `core/sdk.js` linhas 87–99: sem `--model`, o Pi usa o modelo da sessão (`restoredModel`). Com `--model`, o da linha de comando ganha. Repetir o `--model` do spawn na retomada desfaz uma troca de modelo feita no meio do trabalho.
-- **A pasta volta.** `--session` e `--resume` rodam na pasta gravada na sessão. `--session-id` procura na pasta atual, então o crew precisa abrir o painel no worktree (`docs/sessions.md`).
+- **Modelo e raciocínio voltam.** "A session records model and thinking-level changes. Resuming the session restores them" ([`docs/models.md`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/models.md)). No código, `core/sdk.js` linhas 87–99 ([`src/core/sdk.ts`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/src/core/sdk.ts)): sem `--model`, o Pi usa o modelo da sessão (`restoredModel`). Com `--model`, o da linha de comando ganha. Repetir o `--model` do spawn na retomada desfaz uma troca de modelo feita no meio do trabalho.
+- **A pasta volta.** `--session` e `--resume` rodam na pasta gravada na sessão. `--session-id` procura na pasta atual, então o crew precisa abrir o painel no worktree ([`docs/sessions.md`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/sessions.md)).
 
 ### O que não volta
 
 - **Extensões.** O `-e <arquivo>` vale só para o processo. Na retomada, o Pi carrega as extensões globais (`~/.pi/agent/extensions`) e as do projeto (`.pi/extensions`, se a pasta for confiável), e não o `crew-state.ts` do home-repo, que entra por `-e` nos outros repos.
-- **`--approve`.** "Trusts project-local configuration and resources for this process" (`docs/cli.md`). Sem ele, o Pi segue o `~/.pi/agent/trust.json` (`docs/security.md`, *How Pi chooses a trust decision*):
+- **`--approve`.** "Trusts project-local configuration and resources for this process" ([`docs/cli.md`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/cli.md)). Sem ele, o Pi segue o `~/.pi/agent/trust.json` ([`docs/security.md`, *How Pi chooses a trust decision*](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/security.md#how-pi-chooses-a-trust-decision)):
   - No PC, `C:\Users\sadvi\worktrees` está confiável, e a decisão da pasta-mãe vale para as filhas. Por isso a falta do `--approve` não trava o worker lá.
   - Na VPS, o `trust.json` não tem `~/worktrees`. Sem `--approve`, o Pi pergunta (no modo TUI) e o worker fica parado na pergunta.
 - **Variáveis de ambiente.** São do processo, e o Pi não as grava na sessão.
@@ -66,9 +66,9 @@ Fontes: [Session state and restore](https://raw.githubusercontent.com/herdrdev/h
 Não houve como reproduzir aqui. O código e a doc dão duas causas prováveis, a conferir à mão:
 
 - A referência da sessão não vale mais: o `.jsonl` foi apagado, ou o worker caiu antes da primeira mensagem e o arquivo nunca existiu. O painel volta como shell.
-- O Herdr apaga o agente do painel quando "the pane is back at its idle shell prompt" (`add-herdr-support.mdx`, *Release on exit*). Entre o shell voltar e o pi subir, `herdr pane get` não diz `pi`.
+- O Herdr apaga o agente do painel quando "the pane is back at its idle shell prompt" ([`add-herdr-support.mdx`, *Release on exit*](https://raw.githubusercontent.com/herdrdev/herdr/v0.9.5/docs/next/website/src/content/docs/add-herdr-support.mdx)). Entre o shell voltar e o pi subir, `herdr pane get` não diz `pi`.
 
-O vigia lê o `agent` do painel (`worker_view` em `scripts/crew.py`) e marca `not_pi` quando ele vem diferente de `pi`.
+O vigia lê o `agent` do painel (`worker_view` em [`scripts/crew.py`](../../scripts/crew.py)) e marca `not_pi` quando ele vem diferente de `pi`.
 
 ### O report do crew prevalece sobre o da integração?
 
@@ -93,7 +93,7 @@ Consequência para hoje: os `report-agent` e `release-agent` com `--source crew`
 - O comando sobreviveu aos reports seguintes da integração, que não trazem comando, porque a fonte é a mesma (`reconcile_reported_resume`, [linha 1996](https://github.com/herdrdev/herdr/blob/v0.9.5/src/terminal/state.rs#L1996)).
 - Mesmo assim, não serve como caminho:
   - A doc manda não usar o prefixo `herdr:` ("Don't start it with `herdr:`, because Herdr's own integrations use that prefix"), então qualquer versão nova pode quebrá-lo.
-  - O comando tem de começar por um nome simples, sem caminho, sem apóstrofo, com no máximo 64 argumentos (`validate_resume_argv`, `agent_resume.rs` linha 58). Não dá para pôr `CREW_STATE_FILE=… pi …` nem `env …` no PowerShell.
+  - O comando tem de começar por um nome simples, sem caminho, sem apóstrofo, com no máximo 64 argumentos ([`validate_resume_argv`, `agent_resume.rs` linha 58](https://github.com/herdrdev/herdr/blob/v0.9.5/src/agent_resume.rs#L58)). Não dá para pôr `CREW_STATE_FILE=… pi …` nem `env …` no PowerShell.
   - Na VPS, o Herdr 0.9.1 ignora comandos de retomada, que pedem o 0.9.2 ("Resume commands need Herdr 0.9.2 or later").
 
 ### `resume_agents_on_restore = false`
@@ -103,9 +103,9 @@ Com ele desligado, o Herdr ainda restaura áreas de trabalho, abas, painéis, pa
 ## 3. Um `pi` dentro do painel gravando no estado do pai
 
 - Todo processo filho herda o ambiente do painel. Num shell do worker (o `bash` do próprio Pi), estão `CREW_STATE_FILE`, `CREW_AGENT_NAME`, `HERDR_ENV=1` e `HERDR_PANE_ID`: conferido com `env` neste painel.
-- O Pi só troca as variáveis da sessão: a ferramenta `bash` apaga e regrava `PI_SESSION_ID`, `PI_SESSION_FILE`, `PI_PROVIDER`, `PI_MODEL` e `PI_REASONING_LEVEL` (`dist/core/tools/bash.js` linha 161). As do crew passam intactas.
+- O Pi só troca as variáveis da sessão: a ferramenta `bash` apaga e regrava `PI_SESSION_ID`, `PI_SESSION_FILE`, `PI_PROVIDER`, `PI_MODEL` e `PI_REASONING_LEVEL` (`dist/core/tools/bash.js` linha 161; [`src/core/tools/bash.ts`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/src/core/tools/bash.ts)). As do crew passam intactas.
 - O `crew-state.ts` lê `process.env.CREW_STATE_FILE` no `session_start`. Um `pi -p` rodado de dentro do worker grava `idle` e depois `gone` no `state.json` do worker, e o vigia o vê fechado.
-- `PI_CODING_AGENT` não serve de sinal: o Pi o põe em `true` no próprio processo ao subir (`dist/cli/setup.js` linha 5), seja ele filho ou não.
+- `PI_CODING_AGENT` não serve de sinal: o Pi o põe em `true` no próprio processo ao subir (`dist/cli/setup.js` linha 5; [`src/cli/setup.ts`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/src/cli/setup.ts)), seja ele filho ou não.
 - A integração do Herdr já se protege: ela só reporta no modo TUI (`if (ctx?.mode !== "tui") return;` em `herdr-agent-state.ts`), e um `pi -p` filho não é TUI.
 
 **Conserto que o código sustenta:**
