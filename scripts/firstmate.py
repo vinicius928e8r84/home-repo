@@ -10,7 +10,7 @@ INBOX = "FM_HOME=/home/factory/firstmate /home/factory/firstmate/bin/fm-inbox.sh
 TAG = "[home-repo] "
 USO = """firstmate: talk to the firstmate on the main VPS from the Home Repo.
 
-The firstmate is the supervisor that runs the PerpetualMiner and Nova-AI Time
+The firstmate supervises its own Time, which runs PerpetualMiner and Nova-AI
 on the VPS. This script reaches its captain inbox over SSH (through WSL, which
 already holds the key `main-vps-factory`). It never changes anything on the VPS
 except adding a note.
@@ -18,7 +18,7 @@ except adding a note.
   python scripts/firstmate.py ready                 is the firstmate up and listening?
   python scripts/firstmate.py note "text"           send a note; prints its id
   python scripts/firstmate.py replies [--all]       our notes and the answers (--all: every inbox note)
-  python scripts/firstmate.py status                what the Time is doing (read-only)
+  python scripts/firstmate.py status                what its Time is doing (read-only)
 
 A note arrives in the firstmate's session as a wake. It is tagged
 "[home-repo]", so the firstmate reads it as coming from this agent, not as an
