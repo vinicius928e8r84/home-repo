@@ -18,6 +18,11 @@ O código ainda usa `orquestrador` (no brief do `crew.py`); renomear aos poucos.
 Agente que faz uma Tarefa num repo, numa cópia isolada, e nunca fala com o Dono.
 _Avoid_: crewmate, subagente, tripulante
 
+**Time**:
+O Chief e os agentes que ele comanda: hoje os Workers, um dia também gerentes com os Workers deles. O Firstmate da VPS tem o seu próprio Time.
+_Avoid_: frota, fleet, crew, tripulação
+O código ainda usa `frota` e `fleet`; a troca vai numa PR própria.
+
 **Vigia**:
 O que observa os Workers e avisa o Chief quando algo muda.
 _Avoid_: watcher, monitor
