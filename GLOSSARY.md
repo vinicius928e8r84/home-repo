@@ -39,6 +39,14 @@ _Avoid_: projeto, esforço, épico, iniciativa
 Um pedido com critério de pronto, entregue a um Worker. Termina em PR, Relatório ou nada.
 _Avoid_: job, ticket (ticket é a issue do repo)
 
+**Folga**:
+Uma máquina tem folga quando pode receber mais um Worker: memória, disco e processador dentro dos limites, e abaixo do teto de Workers dela.
+_Avoid_: capacidade, recursos livres
+
+**Fila**:
+As Tarefas esperando Folga ou vaga no teto, abertas na ordem dela.
+_Avoid_: queue, espera
+
 **Decisão**:
 Pergunta que só o Dono responde. Fica registrada até ser respondida.
 _Avoid_: pendência, hold
