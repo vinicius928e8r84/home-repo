@@ -44,7 +44,7 @@ Uma máquina tem folga quando pode receber mais um Worker: memória, disco e pro
 _Avoid_: capacidade, recursos livres
 
 **Fila**:
-As Tarefas esperando Folga ou vaga no teto, abertas na ordem dela.
+As Tarefas que esperam Folga para abrir. Merges e revisões vão à frente, mas também esperam.
 _Avoid_: queue, espera
 
 **Decisão**:
