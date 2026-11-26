@@ -1,0 +1,33 @@
+name: Reexecutar o Registro da PR
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: reexecutar-registro-da-pr-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  reexecutar:
+    name: Reexecutar o Registro da PR
+    if: ${{ github.event.issue.pull_request && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) && contains(github.event.comment.body, 'Veredito:') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Reexecutar o check do head atual da PR
+        run: python -m scripts.freios.reexecutar_registro
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
