@@ -65,6 +65,13 @@ function replaceFile(target: string, text: string): void {
   }
 }
 
+function locate(cwd: string, pane: string | undefined): { file?: string; name?: string } {
+  if (process.env.CREW_STATE_FILE) return { file: process.env.CREW_STATE_FILE, name: process.env.CREW_AGENT_NAME };
+  if (!pane || !isHomeRepo(cwd)) return {};
+  const dir = process.env.CREW_STATE_DIR || path.join(cwd, "state", "crew");
+  return { file: path.join(dir, "_chief", `${pane.replace(/[^A-Za-z0-9_-]/g, "_")}.json`), name: "chief" };
+}
+
 function createRecord(pane: string | undefined) {
   let file: string | undefined;
   const body = { state: "idle", turns: 0, at: "", pane: pane ?? null, pid: process.pid, outcome: null as Outcome, beat: "" };
@@ -153,15 +160,7 @@ export default function (pi: any) {
       inert = true;
       return;
     }
-    const cwd = ctx?.cwd ?? process.cwd();
-    if (process.env.CREW_STATE_FILE) {
-      file = process.env.CREW_STATE_FILE;
-      name = process.env.CREW_AGENT_NAME;
-    } else if (pane && isHomeRepo(cwd)) {
-      const dir = process.env.CREW_STATE_DIR || path.join(cwd, "state", "crew");
-      file = path.join(dir, "_chief", `${pane.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
-      name = "chief";
-    }
+    ({ file, name } = locate(ctx?.cwd ?? process.cwd(), pane));
     sessionFile = sessionFileOf(ctx);
     record.open(file);
     write("idle");
