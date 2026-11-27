@@ -71,7 +71,10 @@ def gravar(tarefas):
 
 
 def pendentes():
-    return bool(ler_com_trava())
+    try:
+        return bool(ler_com_trava())
+    except Fail:
+        return True
 
 
 def recursos():

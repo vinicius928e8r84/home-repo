@@ -72,8 +72,10 @@ class QuandoOSpawnEOVigiaGravamJuntos(FilaCase):
         with self.assertRaises(self.crew.Fail) as erro:
             self.fila()
         self.assertEqual(erro.exception.step, "fila")
-        with self.assertRaises(self.crew.Fail):
-            self.fila_modulo().pendentes()
+
+    def test_com_a_trava_presa_o_vigia_segue_como_se_houvesse_fila(self):
+        self.segurar_a_trava()
+        self.assertTrue(self.fila_modulo().pendentes())
 
 
 class QuandoUmaTarefaSaiDaFila(FilaCase):
