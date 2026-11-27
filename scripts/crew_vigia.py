@@ -168,6 +168,7 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
     prs = crew.module("crew_prs")
     prs.refresh()
     crew.module("crew_firstmate").refresh()
+    crew.module("crew_cota").refresh()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))
     sem_pr = sem_pr_esperada()
