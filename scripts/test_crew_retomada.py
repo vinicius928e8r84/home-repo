@@ -68,44 +68,12 @@ class Retomada(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         return json.loads(done.stdout.strip().splitlines()[-1]), session
 
-    def resumes(self, calls):
-        return [call for call in calls if "--source" in call and call[call.index("--source") + 1] == "herdr:pi"]
-
     @unittest.skipUnless(NODE, "node is not installed")
-    def test_the_resume_command_carries_env_extension_model_and_session(self):
-        calls, session = self.run_extension(["--approve", "-e", "/crew/crew-state.ts", "--model", "claude/haiku:low", "--session", "/velha.jsonl"])
-        resumes = self.resumes(calls)
-        self.assertEqual(len(resumes), 3)
-        report = resumes[-1]
-        self.assertEqual(report[:3], ["pane", "report-agent", "w1:p2"])
-        self.assertEqual(report[report.index("--agent-session-path") + 1], session)
-        command = report[report.index("--") + 1:]
-        self.assertEqual(command[0], "env")
-        self.assertIn("CREW_STATE_FILE=" + os.path.join(self.tmp, "state.json"), command)
-        self.assertIn("CREW_AGENT_NAME=ana", command)
-        self.assertIn("PI_CODING_AGENT_DIR=/crew/pi-agent", command)
-        self.assertIn("PATH=/crew/bin:/usr/bin", command)
-        words = command[command.index("pi"):]
-        self.assertEqual(words, ["pi", "--approve", "-e", "/crew/crew-state.ts", "--model", "claude/haiku:low", "--session", session])
-
-    @unittest.skipUnless(NODE, "node is not installed")
-    def test_the_resume_report_follows_the_crew_report_and_its_seq_only_grows(self):
-        calls, _ = self.run_extension(["--approve"])
-        order = [call[call.index("--source") + 1] for call in calls if "--source" in call]
-        self.assertEqual(order[:2], ["crew", "herdr:pi"])
-        seqs = [int(call[call.index("--seq") + 1]) for call in self.resumes(calls)]
-        self.assertEqual(seqs, sorted(set(seqs)))
-        self.assertGreater(seqs[0], 10 ** 15)
-
-    @unittest.skipUnless(NODE, "node is not installed")
-    def test_no_resume_before_the_session_file_exists(self):
-        calls, _ = self.run_extension(["--approve"], session_exists=False)
-        self.assertEqual(self.resumes(calls), [])
-
-    @unittest.skipUnless(NODE, "node is not installed")
-    def test_no_resume_when_an_argument_would_break_herdr(self):
-        calls, _ = self.run_extension(["--approve", "--model", "it's"])
-        self.assertEqual(self.resumes(calls), [])
+    def test_the_extension_registers_no_resume_with_herdr(self):
+        calls, _ = self.run_extension(["--approve", "-e", "/crew/crew-state.ts", "--model", "claude/haiku:low", "--session-id", "ana"])
+        sources = [call[call.index("--source") + 1] for call in calls if "--source" in call]
+        self.assertEqual(sources, ["crew", "crew", "crew"])
+        self.assertFalse([call for call in calls if "--agent-session-path" in call or "--seq" in call])
 
 
 @unittest.skipUnless(BASH, "bash is not installed")
