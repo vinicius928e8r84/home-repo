@@ -200,6 +200,14 @@ class SemRetomada(Automatica):
         self.assertEqual(self.retomadas(), [])
         self.assertTrue([linha for linha in self.told_chief() if "parou, causa: erro desconhecido" in linha])
 
+    def test_retomada_que_falha_volta_como_erro_sem_derrubar_o_ciclo(self):
+        def falha(pedido):
+            raise self.crew.Fail("retomada", "sem painel")
+        self.crew.module("crew_retomada").retomar = falha
+        self.parar(API)
+        self.clock.now += 200
+        self.assertIn("sem painel", self.auto.rodada())
+
     def test_worker_fechado_nao_volta(self):
         self.parar(API)
         meta = self.crew.read_meta("t-job")

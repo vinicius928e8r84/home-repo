@@ -215,10 +215,9 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
         crew.module("crew_fila").rodada()
     except crew.Fail as e:
         print(json.dumps(dict(ok=False, step="fila", error=e.error)), flush=True)
-    try:
-        crew.module("crew_retomada_auto").rodada()
-    except crew.Fail as e:
-        print(json.dumps(dict(ok=False, step="retomada", error=e.error)), flush=True)
+    erro = crew.module("crew_retomada_auto").rodada()
+    if erro:
+        print(json.dumps(dict(ok=False, step="retomada", error=erro)), flush=True)
     fechar_mesclados()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))

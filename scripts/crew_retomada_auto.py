@@ -3,7 +3,6 @@ import os
 import socket
 import types
 
-Fail = None
 crew = None
 
 ATRASOS_DA_API = (2, 5, 15, 30)
@@ -88,10 +87,7 @@ def tentar(meta, registro):
     registro["ultima"] = crew.time.time()
     gravar(meta, registro)
     pedido = types.SimpleNamespace(name=meta["name"], start_timeout=ESPERA_DO_PI, prompt_timeout=ESPERA_DA_MENSAGEM)
-    try:
-        crew.module("crew_retomada").retomar(pedido)
-    except Fail as e:
-        print(json.dumps(dict(ok=False, step="retomada", worker=meta["name"], error=e.error)), flush=True)
+    crew.module("crew_retomada").retomar(pedido)
 
 
 def avisar(meta, causa, registro):
@@ -144,6 +140,12 @@ def seguir(meta):
 
 
 def rodada():
+    erros = []
     for meta in crew.workers():
-        if not meta.get("host") and not meta.get("closing"):
+        if meta.get("host") or meta.get("closing"):
+            continue
+        try:
             seguir(meta)
+        except crew.Fail as e:
+            erros.append("%s: %s" % (meta["name"], e.error))
+    return "; ".join(erros) or None
