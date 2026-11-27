@@ -72,6 +72,15 @@ def pedidos_abertos(meta, decisoes):
     return [d for d in decisoes.values() if d.get("worker") == meta["name"] and d.get("status") == "open"]
 
 
+def parada_de(meta, visto, sessao, agora):
+    causa = None if meta.get("host") else crew_causa.da_parada(visto, agora)
+    if causa:
+        return "parou: %s" % causa
+    if sessao.get("erro") and visto.get("state", "starting") != "working":
+        return "ERRO: %s" % curto(sessao["erro"])
+    return None
+
+
 def estado_de(meta, contexto, sessao):
     visto = ler_json(meta.get("state_file", ""))
     vigia = ler_json(os.path.join(contexto["estado"], meta["name"], "watch.json"))
@@ -83,11 +92,9 @@ def estado_de(meta, contexto, sessao):
         return "!", "ERRO: %s" % curto(meta["error"].get("error"))
     if estado == "gone":
         return "!", "painel fechou"
-    causa = None if meta.get("host") else crew_causa.da_parada(visto, agora)
-    if causa:
-        return "!", "parou: %s" % causa
-    if sessao.get("erro") and estado != "working":
-        return "!", "ERRO: %s" % curto(sessao["erro"])
+    parada = parada_de(meta, visto, sessao, agora)
+    if parada:
+        return "!", parada
     if vigia.get("stalled") and estado == "working":
         return "!", "parado há %d min" % minutos((vigia.get("progress") or {}).get("at") or visto.get("at"), agora)
     esperando = pedidos_abertos(meta, contexto["decisoes"])
