@@ -26,6 +26,21 @@ ESPERA_DO_SERVIDOR = 30
 BATIDA_SEGUNDOS = 10
 
 
+def ler(caminho):
+    try:
+        with open(caminho, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def cwd_do(caminho):
+    try:
+        return json.loads(ler(caminho)).get("cwd")
+    except (ValueError, AttributeError):
+        return None
+
+
 def texto_da(mensagem):
     blocos = mensagem.get("content") or []
     return " ".join(bloco.get("text", "") for bloco in blocos if isinstance(bloco, dict))
@@ -185,14 +200,7 @@ class Drill:
         return [int(numero) for numero in achados.stdout.split()]
 
     def rodando_sleep(self, pid):
-        for filho in self.filhos_do_pi(pid):
-            try:
-                with open("/proc/%d/cmdline" % filho, encoding="utf-8", errors="replace") as f:
-                    if f.read().split("\0")[0] == "sleep":
-                        return True
-            except OSError:
-                continue
-        return False
+        return any(ler("/proc/%d/cmdline" % filho).split("\0")[0] == "sleep" for filho in self.filhos_do_pi(pid))
 
     def matar_pi(self):
         pid = self.estado_do_worker().get("pid")
@@ -271,12 +279,8 @@ class Drill:
     def processos_do_claude(self):
         achados = []
         for caminho in glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "sessions", "*.json")):
-            try:
-                with open(caminho, encoding="utf-8") as f:
-                    if json.load(f).get("cwd") == self.meta()["worktree"]:
-                        achados += [caminho] + glob.glob(caminho[:-len(".json")] + ".*.key")
-            except (OSError, ValueError):
-                continue
+            if cwd_do(caminho) == self.meta()["worktree"]:
+                achados += [caminho] + glob.glob(caminho[:-len(".json")] + ".*.key")
         return achados
 
     def passo(self, nome, funcao):
