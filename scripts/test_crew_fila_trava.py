@@ -36,7 +36,7 @@ class QuandoOSpawnEOVigiaGravamJuntos(FilaCase):
         self.assertEqual(self.abertos(), ["t-velha"])
         self.assertEqual(self.nomes_na_fila(), ["t-nova"])
 
-    def test_quem_chega_com_a_trava_ocupada_espera_e_depois_desiste_com_erro(self):
+    def segurar_a_trava(self):
         fila = self.fila_modulo()
         fila.ESPERA_DA_TRAVA_SEGUNDOS = 0.3
         pronta, solta = threading.Event(), threading.Event()
@@ -51,6 +51,11 @@ class QuandoOSpawnEOVigiaGravamJuntos(FilaCase):
         self.addCleanup(dono.join)
         self.addCleanup(solta.set)
         self.assertTrue(pronta.wait(5))
+        return solta, dono
+
+    def test_quem_chega_com_a_trava_ocupada_espera_e_depois_desiste_com_erro(self):
+        fila = self.fila_modulo()
+        solta, dono = self.segurar_a_trava()
         with self.assertRaises(self.crew.Fail) as erro:
             with fila.trava():
                 pass
@@ -59,6 +64,16 @@ class QuandoOSpawnEOVigiaGravamJuntos(FilaCase):
         dono.join()
         with fila.trava():
             pass
+
+    def test_quem_so_le_a_fila_tambem_espera_a_trava(self):
+        self.recursos(folga=False, motivo=SEM_MEMORIA)
+        self.spawn()
+        self.segurar_a_trava()
+        with self.assertRaises(self.crew.Fail) as erro:
+            self.fila()
+        self.assertEqual(erro.exception.step, "fila")
+        with self.assertRaises(self.crew.Fail):
+            self.fila_modulo().pendentes()
 
 
 class QuandoUmaTarefaSaiDaFila(FilaCase):

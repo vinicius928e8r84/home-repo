@@ -60,13 +60,18 @@ def ler():
     return lida.get("tarefas", []) if isinstance(lida, dict) else []
 
 
+def ler_com_trava():
+    with trava():
+        return ler()
+
+
 def gravar(tarefas):
     os.makedirs(crew.STATE, exist_ok=True)
     crew.write_text(arquivo(), json.dumps(dict(tarefas=tarefas), ensure_ascii=False))
 
 
 def pendentes():
-    return bool(ler())
+    return bool(ler_com_trava())
 
 
 def recursos():
@@ -218,7 +223,7 @@ def anotar_a_rodada(vistas, aberta):
 
 
 def rodada():
-    tarefas = sorted(ler(), key=prioridade)
+    tarefas = sorted(ler_com_trava(), key=prioridade)
     proxima, espera_por_vaga = None, False
     for tarefa in tarefas:
         host, motivo = decidir(tarefa)
@@ -252,7 +257,7 @@ def comando(a):
             gravar(tarefas)
     if a.andar:
         rodada()
-    return dict(ok=True, fila=[quadro(tarefa) for tarefa in sorted(ler(), key=prioridade)])
+    return dict(ok=True, fila=[quadro(tarefa) for tarefa in sorted(ler_com_trava(), key=prioridade)])
 
 
 def registrar(sub):
