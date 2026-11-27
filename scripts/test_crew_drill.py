@@ -10,15 +10,15 @@ from scripts.test_crew import CHIEF, CrewCase
 
 HERDR_DE_MENTIRA = """#!/bin/bash
 echo "$*" >> "$DRILL_LOG"
-echo "$CREW_STATE_DIR|$CREW_REPOS|$CREW_HERDR_SESSION|$HERDR_PANE_ID|$HERDR_ENV" >> "$DRILL_LOG.env"
+echo "$CREW_STATE_DIR|$CREW_REPOS|$CREW_HERDR_SESSION|$HERDR_PANE_ID|$HERDR_ENV|$XDG_CONFIG_HOME" >> "$DRILL_LOG.env"
+socket="$XDG_CONFIG_HOME/herdr/sessions/$2"
 shift 2
 case "$1 $2" in
-  "server ") touch "$DRILL_RODANDO"; while [ -e "$DRILL_RODANDO" ]; do sleep 0.2; done ;;
+  "server ") mkdir -p "$socket"; touch "$socket/herdr.sock" "$DRILL_RODANDO"; while [ -e "$DRILL_RODANDO" ]; do sleep 0.2; done ;;
   "server stop") rm -f "$DRILL_RODANDO" ;;
-  "workspace list") echo '{"result":{"workspaces":[]}}' ;;
+  "workspace list") [ -e "$DRILL_RODANDO" ] && echo '{"result":{"workspaces":[]}}' ;;
   "workspace create") echo '{"result":{"root_pane":{"pane_id":"w1:p1"}}}' ;;
   "pane get") echo '{"result":{"pane":{"pane_id":"w1:p1"}}}' ;;
-  "session delete") ;;
   *) echo "herdr de mentira: $*" >&2; exit 1 ;;
 esac
 """
@@ -67,7 +67,8 @@ class Drill(CrewCase):
 
     def test_it_never_reuses_the_real_state_repos_or_chief_pane(self):
         self.rodar()
-        for estado, repos, sessao, pane, _ in (linha.split("|") for linha in self.linhas(".env")):
+        for estado, repos, sessao, pane, _, xdg in (linha.split("|") for linha in self.linhas(".env")):
+            self.assertEqual(os.path.dirname(xdg), os.path.dirname(estado))
             self.assertNotEqual(estado, self.state)
             self.assertTrue(estado.startswith(tempfile.gettempdir()))
             self.assertNotEqual(repos, os.environ["CREW_REPOS"])
@@ -81,7 +82,12 @@ class Drill(CrewCase):
         self.assertFalse(os.path.exists(os.environ["DRILL_RODANDO"]))
         self.assertEqual(os.listdir(os.path.join(self.home, "worktrees")) if os.path.isdir(os.path.join(self.home, "worktrees")) else [], [])
         self.assertTrue(any(" server stop" in " " + linha for linha in self.linhas()))
-        self.assertTrue(any(" session delete " in linha for linha in self.linhas()))
+
+    def test_its_herdr_server_lives_in_its_own_temporary_folder_and_panes_get_the_real_config_back(self):
+        self.rodar()
+        xdg = self.linhas(".env")[0].split("|")[5]
+        self.assertTrue(xdg.startswith(tempfile.gettempdir()))
+        self.assertNotEqual(xdg, os.path.join(os.path.expanduser("~"), ".config"))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -44,7 +45,15 @@ class Drill:
         self.copia = None
         self.parar_batida = threading.Event()
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("HERDR_", "CREW_"))}
-        self.env.update(CREW_STATE_DIR=self.estado, CREW_REPOS=os.path.join(self.pasta, "repos.json"), CREW_HERDR_SESSION=self.sessao)
+        self.env.update(CREW_STATE_DIR=self.estado, CREW_REPOS=os.path.join(self.pasta, "repos.json"), CREW_HERDR_SESSION=self.sessao,
+                        XDG_CONFIG_HOME=os.path.join(self.pasta, "xdg"), SHELL=os.path.join(self.pasta, "shell"))
+        self.socket = os.path.join(self.env["XDG_CONFIG_HOME"], "herdr", "sessions", self.sessao, "herdr.sock")
+
+    def shell_dos_paineis(self):
+        volta = "export XDG_CONFIG_HOME=" + shlex.quote(os.environ["XDG_CONFIG_HOME"]) if "XDG_CONFIG_HOME" in os.environ else "unset XDG_CONFIG_HOME"
+        with open(self.env["SHELL"], "w", encoding="utf-8") as f:
+            f.write("#!/bin/sh\n%s\nexec %s \"$@\"\n" % (volta, shlex.quote(os.environ.get("SHELL") or "/bin/bash")))
+        os.chmod(self.env["SHELL"], 0o755)
 
     def rodar(self, argv):
         feito = subprocess.run(argv, env=self.env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=ESPERA_DO_TURNO)
@@ -78,6 +87,8 @@ class Drill:
             self.servidor = subprocess.Popen(["herdr", "--session", self.sessao, "server"], env=self.env, stdout=registro, stderr=registro,
                                              stdin=subprocess.DEVNULL, start_new_session=True)
         self.esperar(self.servidor_responde, ESPERA_DO_SERVIDOR, "o Herdr descartável subir")
+        if not os.path.exists(self.socket):
+            raise Fail("drill", "o Herdr do drill não abriu o socket em %s; paro antes de falar com ele" % self.socket)
 
     def parar_servidor(self):
         try:
@@ -112,6 +123,7 @@ class Drill:
             json.dump(dict(chief=self.env["HERDR_PANE_ID"]), f)
 
     def preparar(self):
+        self.shell_dos_paineis()
         self.preparar_repo()
         self.subir_servidor()
         aberta = json.loads(self.herdr("workspace", "create", "--label", "chief", "--cwd", self.pasta, "--no-focus"))
@@ -119,7 +131,7 @@ class Drill:
         os.makedirs(self.estado, exist_ok=True)
         self.tocar_batida()
         threading.Thread(target=self.bater, daemon=True).start()
-        return "sessão %s, repo de teste e painel do chief em %s" % (self.sessao, self.pasta)
+        return "sessão %s com socket %s, repo de teste e painel do chief em %s" % (self.sessao, self.socket, self.pasta)
 
     def meta(self):
         with open(os.path.join(self.estado, self.nome, "meta.json"), encoding="utf-8") as f:
@@ -239,10 +251,6 @@ class Drill:
             pass
         if self.servidor:
             self.parar_servidor()
-        try:
-            self.herdr("session", "delete", self.sessao)
-        except Fail:
-            pass
         self.apagar_conversas()
         shutil.rmtree(self.pasta, ignore_errors=True)
 
