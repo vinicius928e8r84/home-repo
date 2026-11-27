@@ -151,6 +151,9 @@ class CrewCase(unittest.TestCase):
         self.crew.watcher_alive = lambda: True
         self.crew.module("crew_firstmate").ler_recibos = lambda: dict(handled=[], pending=[], replies=[])
         self.crew.module("crew_cota").ler = lambda: dict(providers=[])
+        recursos = self.crew.module("crew_recursos")
+        recursos.disparar_original = recursos.disparar
+        recursos.disparar = lambda: types.SimpleNamespace(poll=lambda: 0)
 
     def make_repo(self):
         origin = os.path.join(self.tmp, "origin.git")
