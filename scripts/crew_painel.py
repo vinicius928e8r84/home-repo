@@ -1,6 +1,7 @@
 import datetime
 import os
 
+import crew_causa
 import crew_sessao
 
 HORAS_DOS_FECHADOS = 12
@@ -82,6 +83,9 @@ def estado_de(meta, contexto, sessao):
         return "!", "ERRO: %s" % curto(meta["error"].get("error"))
     if estado == "gone":
         return "!", "painel fechou"
+    causa = None if meta.get("host") else crew_causa.da_parada(visto, agora)
+    if causa:
+        return "!", "parou: %s" % causa
     if sessao.get("erro") and estado != "working":
         return "!", "ERRO: %s" % curto(sessao["erro"])
     if vigia.get("stalled") and estado == "working":
