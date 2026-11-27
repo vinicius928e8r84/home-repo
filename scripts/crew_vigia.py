@@ -1,5 +1,8 @@
+import contextlib
+import io
 import json
 import os
+import types
 
 Fail = None
 crew = None
@@ -164,6 +167,31 @@ def resumir(chief, eventos, minutos, sem_pr):
     crew.write_text(caminho, json.dumps(visto))
 
 
+def fechar(nome):
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            crew.cmd_close(types.SimpleNamespace(name=nome, force=False))
+    except crew.Fail as e:
+        print(json.dumps(dict(ok=False, step="close", worker=nome, error=e.error)), flush=True)
+
+
+def mesclado_com_relatorio(meta):
+    visto = crew.file_state(os.path.join(crew.STATE, meta["name"], "watch.json"))
+    return visto.get("report") and visto.get("merged")
+
+
+def fechar_mesclados():
+    prontos = [meta for meta in crew.workers() if mesclado_com_relatorio(meta)]
+    if not prontos:
+        return
+    dono = crew.module("crew_dono")
+    abertas = [d for d in crew.decisions().values() if d.get("status") == "open"]
+    paginas = dono.paginas_esperando(" ".join("%s %s" % (d["question"], d.get("recommend") or "") for d in abertas))
+    for meta in prontos:
+        if not dono.tem_pagina(meta["worktree"], paginas):
+            fechar(meta["name"])
+
+
 def rodada(chief, minutos=RESUMO_MINUTOS):
     prs = crew.module("crew_prs")
     prs.refresh()
@@ -172,6 +200,7 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
     erro = crew.module("crew_recursos").refresh()
     if erro:
         print(json.dumps(dict(ok=False, step="recursos", error=erro)), flush=True)
+    fechar_mesclados()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))
     sem_pr = sem_pr_esperada()
