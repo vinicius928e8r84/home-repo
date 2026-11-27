@@ -157,9 +157,14 @@ class WorkflowReexecutarRegistro(unittest.TestCase):
         self.assertNotRegex(self.texto, r"(?m)^name: Registro da PR$")
 
 
+FECHAMENTO_DO_MODELO = re.compile(r"^Closes https://github\.com/([\w.-]+/[\w.-]+)/issues/N$", re.M)
+
+
 class ModeloDaPr(unittest.TestCase):
     def conferir(self, corpo):
-        pr = Pr(corpo=corpo, head=HEAD, registros=[revisao(HEAD)], arquivos=["wiki/index.md"], autor="dono", repositorio=REPO)
+        achado = FECHAMENTO_DO_MODELO.search(MODELO.read_text(encoding="utf-8"))
+        repositorio = achado.group(1) if achado else REPO
+        pr = Pr(corpo=corpo, head=HEAD, registros=[revisao(HEAD)], arquivos=["wiki/index.md"], autor="dono", repositorio=repositorio)
         return conferir(pr)
 
     def test_o_modelo_cru_nao_passa_e_o_que_esta_em_comentario_nao_conta(self):
@@ -178,7 +183,7 @@ class ModeloDaPr(unittest.TestCase):
     def test_o_modelo_com_sem_issue_passa(self):
         texto = MODELO.read_text(encoding="utf-8")
         texto = texto.replace("**Atenção:**", "**Atenção:** MÉDIA", 1)
-        texto = texto.replace("Closes https://github.com/vinicius928e8r84/home-repo/issues/N", "Sem issue", 1)
+        texto = FECHAMENTO_DO_MODELO.sub("Sem issue", texto, count=1)
         ok, mensagem = self.conferir(texto)
         self.assertTrue(ok, mensagem)
 
