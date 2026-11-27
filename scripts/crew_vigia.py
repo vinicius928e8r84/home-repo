@@ -1,5 +1,8 @@
+import contextlib
+import io
 import json
 import os
+import types
 
 Fail = None
 crew = None
@@ -164,11 +167,27 @@ def resumir(chief, eventos, minutos, sem_pr):
     crew.write_text(caminho, json.dumps(visto))
 
 
+def fechar(nome):
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            crew.cmd_close(types.SimpleNamespace(name=nome, force=False))
+    except crew.Fail as e:
+        print(json.dumps(dict(ok=False, step="close", worker=nome, error=e.error)), flush=True)
+
+
+def fechar_mesclados():
+    for meta in crew.workers():
+        visto = crew.file_state(os.path.join(crew.STATE, meta["name"], "watch.json"))
+        if visto.get("report") and visto.get("merged"):
+            fechar(meta["name"])
+
+
 def rodada(chief, minutos=RESUMO_MINUTOS):
     prs = crew.module("crew_prs")
     prs.refresh()
     crew.module("crew_firstmate").refresh()
     crew.module("crew_cota").refresh()
+    fechar_mesclados()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))
     sem_pr = sem_pr_esperada()
