@@ -58,8 +58,9 @@ class Prova:
         for linha in self.conversa().splitlines():
             entrada = json.loads(linha)
             texto = str(entrada.get("content", ""))
-            if entrada.get("type") == "custom_message" and entrada.get("customType") == "crew" and marca in texto and PERGUNTA in texto:
-                mensagens.append(texto[:400])
+            trecho = texto[texto.find(marca):].split("\n[crew] ")[0] if marca in texto else ""
+            if entrada.get("type") == "custom_message" and entrada.get("customType") == "crew" and PERGUNTA in trecho:
+                mensagens.append(" ".join(trecho.split())[:400])
         return mensagens
 
     def preparar(self):
