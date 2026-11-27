@@ -10,6 +10,7 @@ RESPOSTA_MAXIMA = 1500
 ACORDAM = {
     "erro": {"spawn_failed", "never_started", "not_pi", "gone"},
     "parado": {"stalled"},
+    "parou": {"stopped"},
     "pedido": {"decision_needed", "question_for_chief"},
     "resposta do firstmate": {"firstmate_reply"},
     "PR pronta para revisão": {"pr_ready_review"},
@@ -103,6 +104,8 @@ def texto(evento):
         return texto_do_pedido(evento)
     if tipo == "firstmate_reply":
         return "respondeu à nota «%s»: %s" % (" ".join(evento.get("note", "").split())[:TITULO_MAXIMO], " ".join(evento.get("reply", "").split())[:RESPOSTA_MAXIMA])
+    if tipo == "stopped":
+        return "%s: parou, causa: %s" % (evento["worker"], evento.get("cause"))
     if tipo.startswith("pr_ready"):
         return "%s#%s «%s» (%s)" % (evento.get("repo"), evento.get("number"), evento.get("title"), evento["worker"])
     return "%s: %s" % (evento["worker"], TEXTOS.get(tipo, tipo))
