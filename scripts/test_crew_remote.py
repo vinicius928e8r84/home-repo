@@ -194,6 +194,14 @@ class RemoteCrewTest(unittest.TestCase):
         status, _ = self.crew("status")
         self.assertEqual([(w["name"], w["host"], w["state"]) for w in status["workers"]], [("home-toy", "vps", "idle")])
 
+    def test_spawn_uploads_the_local_files_the_extension_imports(self):
+        self.spawn()
+        with open(SCRIPTS + "/../.pi/extensions/crew-state.ts", encoding="utf-8") as f:
+            names = re.findall(r'from "\./([^"]+)"', f.read())
+        self.assertTrue(names)
+        for name in names:
+            self.assertTrue(os.path.isfile(self.vps + "/crew-state/" + name), name)
+
     def test_spawn_refuses_a_repo_that_is_not_on_the_host(self):
         result, _ = self.crew("spawn", "absent", "toy", "--request", "x", "--done", "y")
         self.assertFalse(result["ok"])
