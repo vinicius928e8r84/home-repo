@@ -154,7 +154,9 @@ class CrewCase(unittest.TestCase):
         recursos = self.crew.module("crew_recursos")
         recursos.disparar_original = recursos.disparar
         recursos.disparar = lambda: types.SimpleNamespace(poll=lambda: 0)
-        self.crew.module("crew_mesa").executar = lambda argv, ambiente: ""
+        mesa = self.crew.module("crew_mesa")
+        mesa.executar_original = mesa.executar
+        mesa.executar = lambda argv, ambiente: ""
 
     def make_repo(self):
         origin = os.path.join(self.tmp, "origin.git")

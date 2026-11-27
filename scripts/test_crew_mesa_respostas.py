@@ -3,6 +3,7 @@ import os
 import shutil
 import socket
 import subprocess
+import types
 import unittest
 import urllib.request
 
@@ -50,6 +51,23 @@ class ServidorPropio(MesaCase):
         self.mesa.executar = quebra
         self.rodada()
         self.assertIn("turn_ended", self.kinds())
+
+
+class ComandoDoLavish(MesaCase):
+    def rodar(self, no_path):
+        achados, ambiente = [], dict(LAVISH_AXI_PORT="1")
+        self.mesa.shutil = types.SimpleNamespace(which=lambda nome: no_path.get(nome))
+        self.mesa.subprocess = types.SimpleNamespace(run=lambda comando, **_: achados.append(comando) or types.SimpleNamespace(stdout="ok"),
+                                                     TimeoutExpired=subprocess.TimeoutExpired)
+        self.mesa.executar_original(["lavish-axi", "poll", "mesa.html"], ambiente)
+        return achados
+
+    def test_sem_lavish_no_path_a_mesa_usa_o_npx_na_versao_fixa(self):
+        npx = os.path.join("nodejs", "npx.cmd")
+        self.assertEqual(self.rodar({"npx": npx}), [[npx, "-y", "lavish-axi@" + self.mesa.VERSAO_DO_LAVISH, "poll", "mesa.html"]])
+
+    def test_com_lavish_no_path_a_mesa_usa_o_do_path(self):
+        self.assertEqual(self.rodar({"lavish-axi": "/usr/bin/lavish-axi", "npx": "/usr/bin/npx"}), [["/usr/bin/lavish-axi", "poll", "mesa.html"]])
 
 
 class RespostaDoDono(MesaCase):
