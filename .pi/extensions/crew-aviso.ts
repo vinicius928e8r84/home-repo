@@ -4,6 +4,8 @@ import { chiefFolder, inboxOf, returnOf } from "./lib/crew-chief.ts";
 const POLL_MS = Number(process.env.CREW_AVISO_MS) || 2000;
 const RESUMO = "[resumo]";
 
+const sessionIdOf = (ctx: any): string | undefined => ctx?.sessionManager?.getSessionId?.();
+
 function takeLines(inbox: string): string[] {
   const taken = `${inbox}.taken`;
   try {
@@ -37,7 +39,7 @@ export default function (pi: any) {
   pi.on("session_start", async (_event: any, ctx: any) => {
     if (timer) clearInterval(timer);
     timer = undefined;
-    const folder = chiefFolder(ctx?.cwd ?? process.cwd(), ctx?.sessionManager?.getSessionId?.());
+    const folder = chiefFolder(ctx?.cwd ?? process.cwd(), sessionIdOf(ctx));
     if (!folder) return;
     const inbox = inboxOf(folder);
     const comeback = returnOf(folder);
