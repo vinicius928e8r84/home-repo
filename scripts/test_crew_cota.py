@@ -238,6 +238,26 @@ class Vigia(VigiaCase):
         self.assertFalse(os.path.exists(os.path.join(self.state, "_cota.json")))
         self.assertIn("conta Claude", self.tentativa()["erro"])
 
+    def test_credencial_que_falta_aparece_no_erro_da_tentativa(self):
+        self.quota_axi = {"providers": [{"provider": "claude", "windows": [], "notSetUp": True,
+                                         "state": {"status": "auth_required", "error": "credentials_missing"}}]}
+        self.rodada()
+        self.assertIn("credentials_missing", self.tentativa()["erro"])
+
+    def test_extra_usage_ligado_sem_limite_nao_derruba_a_volta(self):
+        semana = {"id": "seven_day", "resetsAt": "2026-11-29T22:00:00+00:00", "percentRemaining": 30}
+        extra = {"id": "extra_usage", "kind": "credits", "spentUsd": 3}
+        self.quota_axi = {"providers": [{"provider": "claude", "windows": [semana, extra]}]}
+        self.rodada()
+        self.assertEqual(self.arquivo()["janelas"]["7d"]["usado"], 70)
+        self.assertEqual(self.arquivo()["extra"], {"status": "allowed", "reset": None, "ligado": True, "gasto_usd": 3, "limite_usd": None})
+
+    def test_leitura_num_formato_estranho_vira_falha_sem_derrubar_a_volta(self):
+        self.quota_axi = {"providers": [{"provider": "claude", "windows": [{"id": "seven_day"}]}]}
+        self.rodada()
+        self.assertFalse(os.path.exists(os.path.join(self.state, "_cota.json")))
+        self.assertIn("conta Claude", self.tentativa()["erro"])
+
 
 if __name__ == "__main__":
     unittest.main()

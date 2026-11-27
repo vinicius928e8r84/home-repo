@@ -60,15 +60,20 @@ def ler():
     try:
         feito = subprocess.run([comando, "--provider", "claude", "--json"], capture_output=True, text=True, encoding="utf-8",
                                errors="replace", timeout=LIMITE_DA_LEITURA)
-        return json.loads(feito.stdout)
+        saida = json.loads(feito.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired) as e:
         raise Fail("cota", "o quota-axi não respondeu: %s" % e) from e
+    if not isinstance(saida, dict):
+        raise Fail("cota", "o quota-axi respondeu fora do formato")
+    return saida
 
 
 def usado(janela):
-    if "percentUsed" in janela:
+    if isinstance(janela.get("percentUsed"), (int, float)):
         return round(janela["percentUsed"])
-    return round(100 - janela["percentRemaining"])
+    if isinstance(janela.get("percentRemaining"), (int, float)):
+        return round(100 - janela["percentRemaining"])
+    return None
 
 
 def reset(janela):
@@ -82,18 +87,19 @@ def reset(janela):
 def extra_de(janela):
     if janela is None:
         return dict(status="rejected", reset=None, ligado=False, gasto_usd=None, limite_usd=None)
-    return dict(status="rejected" if usado(janela) >= 100 else "allowed", reset=None, ligado=True,
+    return dict(status="rejected" if (usado(janela) or 0) >= 100 else "allowed", reset=None, ligado=True,
                 gasto_usd=janela.get("spentUsd"), limite_usd=janela.get("limitUsd"))
 
 
 def da_leitura(saida):
     claude = next((p for p in saida.get("providers", []) if p.get("provider") == "claude"), {})
-    achadas = {j["id"]: j for j in claude.get("windows", [])}
-    if not any(nome in achadas for nome in JANELAS):
-        raise Fail("cota", "o quota-axi não trouxe a janela semanal nem a de 5 h da conta Claude")
-    usos = {nome: usado(achadas[nome]) for nome in JANELAS if nome in achadas}
+    achadas = {j.get("id"): j for j in claude.get("windows", [])}
+    usos = {nome: usado(achadas[nome]) for nome in JANELAS if nome in achadas and usado(achadas[nome]) is not None}
+    if not usos:
+        motivo = (claude.get("state") or {}).get("error")
+        raise Fail("cota", "o quota-axi não trouxe a janela semanal nem a de 5 h da conta Claude" + (" (%s)" % motivo if motivo else ""))
     status = "rejected" if max(usos.values()) >= 100 else "allowed"
-    janelas = {curto: dict(usado=usos[nome], reset=reset(achadas[nome]), status=status) if nome in achadas else None
+    janelas = {curto: dict(usado=usos[nome], reset=reset(achadas[nome]), status=status) if nome in usos else None
                for nome, curto in JANELAS.items()}
     return dict(at=texto_da_hora(agora_utc()), fonte="quota-axi", host=HOSTS.get(sys.platform, "vps"), status=status,
                 limitante=max(usos, key=usos.get), janelas=janelas, extra=extra_de(achadas.get("extra_usage")))
