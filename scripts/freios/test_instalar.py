@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,14 +12,17 @@ SLUG = "dono/alvo"
 
 
 class GhFalso:
-    def __init__(self, protecao=None):
+    def __init__(self, protecao=None, prs=()):
         self.protecao = protecao
+        self.prs = list(prs)
         self.chamados = []
 
     def __call__(self, comando, cwd=None, entrada=None):
         self.chamados.append((comando, entrada))
-        if comando[:2] == ["git", "ls-files"]:
+        if comando[0] == "git" and cwd == instalar.RAIZ:
             return instalar.rodar(comando, cwd=cwd)
+        if comando[:3] == ["gh", "pr", "list"]:
+            return json.dumps(self.prs)
         if comando[:2] == ["git", "init"]:
             Path(comando[-1]).mkdir(parents=True)
             return ""
@@ -34,7 +38,7 @@ class GhFalso:
         return ""
 
     def escritas(self):
-        return [c for c, _ in self.chamados if c[:3] == ["gh", "api", "-X"] or c[:2] in (["git", "push"], ["gh", "pr"])]
+        return [c for c, _ in self.chamados if c[:3] in (["gh", "api", "-X"], ["gh", "pr", "create"]) or c[:2] == ["git", "push"]]
 
 
 class Argumentos:
@@ -59,7 +63,30 @@ class Copia(unittest.TestCase):
         for caminho in ("scripts/freios/freios.py", ".githooks/pre-push", ".github/workflows/freios.yml", ".gitignore"):
             self.assertIn(caminho, mudados)
         self.assertNotIn("scripts/freios/instalar.py", mudados)
-        self.assertTrue((self.pasta / ".githooks/pre-commit").stat().st_mode & 0o111)
+
+    def test_os_ganchos_entram_no_commit_como_executaveis(self):
+        subprocess.run(["git", "init", "-q", str(self.pasta)], check=True)
+        instalar.copiar(self.pasta, SLUG, self.arquivos)
+        instalar.commitar(self.pasta, "teste")
+        modo = instalar.rodar(["git", "ls-files", "-s", ".githooks/pre-commit"], cwd=self.pasta)
+        self.assertTrue(modo.startswith("100755"), modo)
+
+    def git_do_alvo(self, arquivos):
+        subprocess.run(["git", "init", "-q", str(self.pasta)], check=True)
+        for caminho, texto in arquivos.items():
+            (self.pasta / caminho).parent.mkdir(parents=True, exist_ok=True)
+            (self.pasta / caminho).write_bytes(texto.encode("utf-8"))
+        instalar.commitar(self.pasta, "alvo")
+
+    def test_arquivo_proprio_do_alvo_fica_e_versao_velha_do_home_e_atualizada(self):
+        primeira = instalar.rodar(["git", "log", "--diff-filter=A", "--format=%H", "--", "scripts/freios/principal.py"], cwd=instalar.RAIZ)
+        velha = instalar.rodar(["git", "show", f"{primeira.split()[-1]}:scripts/freios/principal.py"], cwd=instalar.RAIZ)
+        self.git_do_alvo({"scripts/freios/registro_da_pr.py": "regra do alvo\n", "scripts/freios/principal.py": velha})
+        proprios = instalar.proprios_do_alvo(self.pasta, self.arquivos)
+        self.assertEqual(proprios, ["scripts/freios/registro_da_pr.py"])
+        mudados = instalar.copiar(self.pasta, SLUG, self.arquivos, proprios)
+        self.assertEqual(self.ler("scripts/freios/registro_da_pr.py"), "regra do alvo\n")
+        self.assertIn("scripts/freios/principal.py", mudados)
 
     def test_o_modelo_de_pr_aponta_para_as_issues_do_alvo(self):
         instalar.copiar(self.pasta, SLUG, self.arquivos)
@@ -102,6 +129,18 @@ class Copia(unittest.TestCase):
 
 
 class Protecao(unittest.TestCase):
+    def test_so_exige_os_checks_que_os_workflows_do_alvo_rodam(self):
+        with tempfile.TemporaryDirectory() as temporaria:
+            workflows = Path(temporaria) / ".github/workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "freios.yml").write_text("jobs:\n  freios:\n    name: Freios\n", encoding="utf-8")
+            self.assertEqual(instalar.checks_do_alvo(Path(temporaria)), ["Freios"])
+
+    def test_protecao_completa_nao_e_mudada_de_novo(self):
+        atual = {"required_status_checks": {"checks": [{"context": c, "app_id": 15368} for c in instalar.CHECKS]},
+                 "enforce_admins": {"enabled": True}}
+        self.assertEqual([c[0] for c in instalar.chamadas_de_protecao(SLUG, "main", atual)], ["PATCH"])
+
     def test_sem_protecao_liga_tudo_de_uma_vez(self):
         chamadas = instalar.chamadas_de_protecao(SLUG, "main", None)
         self.assertEqual([c[:2] for c in chamadas], [("PATCH", f"repos/{SLUG}"), ("PUT", f"repos/{SLUG}/branches/main/protection")])
@@ -122,7 +161,7 @@ class Protecao(unittest.TestCase):
         self.assertEqual(chamadas[2][:2], ("POST", f"repos/{SLUG}/branches/main/protection/enforce_admins"))
 
     def test_admin_ja_travado_nao_e_chamado_de_novo(self):
-        atual = {"required_status_checks": {"checks": []}, "enforce_admins": {"enabled": True}}
+        atual = {"required_status_checks": {"checks": [{"context": "Testes", "app_id": 1}]}, "enforce_admins": {"enabled": True}}
         self.assertEqual(len(instalar.chamadas_de_protecao(SLUG, "main", atual)), 2)
 
     def test_protecao_sem_checks_exigidos_recusa_em_vez_de_sobrescrever(self):
@@ -136,20 +175,33 @@ class Comando(unittest.TestCase):
         self.assertEqual(instalar.instalar(Argumentos(alvo=SLUG), gh, saida), 0)
         self.assertEqual(gh.escritas(), [])
         self.assertIn("Simulação", saida.getvalue())
-        self.assertIn(f"PUT repos/{SLUG}/branches/main/protection", saida.getvalue())
+        self.assertIn("espera a PR entrar", saida.getvalue())
+        self.assertNotIn("/protection", saida.getvalue())
+
+    def test_simular_o_novo_mostra_a_protecao(self):
+        saida = io.StringIO()
+        instalar.instalar(Argumentos(novo="alvo"), GhFalso(), saida)
+        self.assertIn("PUT repos/alvo/branches/main/protection", saida.getvalue())
 
     def test_simular_o_novo_nao_cria_o_repo(self):
         gh = GhFalso()
         instalar.instalar(Argumentos(novo="alvo"), gh, io.StringIO())
         self.assertFalse(any(c[:3] == ["gh", "repo", "create"] for c, _ in gh.chamados))
 
-    def test_repo_existente_vai_por_pr_e_depois_protege(self):
+    def test_repo_existente_vai_por_pr_e_a_protecao_espera_a_pr(self):
         gh = GhFalso()
         instalar.instalar(Argumentos(alvo=SLUG, simular=False), gh, io.StringIO())
         escritas = gh.escritas()
         self.assertEqual(escritas[0][:2], ["git", "push"])
         self.assertEqual(escritas[1][:3], ["gh", "pr", "create"])
-        self.assertEqual(escritas[-1][3], "PUT")
+        self.assertEqual(escritas[2:], [["gh", "api", "-X", "PATCH", f"repos/{SLUG}", "--input", "-"]])
+
+    def test_com_a_pr_dos_freios_aberta_nao_abre_outra(self):
+        gh = GhFalso(prs=[{"headRefName": "freios/instalar-2026-01-01", "url": "https://x/pull/1"}])
+        saida = io.StringIO()
+        instalar.instalar(Argumentos(alvo=SLUG, simular=False), gh, saida)
+        self.assertFalse(any(c[:3] == ["gh", "pr", "create"] or c[:2] == ["git", "push"] for c in gh.escritas()))
+        self.assertIn("https://x/pull/1", saida.getvalue())
 
     def test_novo_cria_empurra_a_main_e_protege(self):
         gh = GhFalso()
