@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -218,20 +219,33 @@ class Drill:
         for caminho in glob.glob(os.path.join(crew.module("crew_retomada").pi_dir(), "claude-bridge", "sessions", "s-*.json")):
             with open(caminho, encoding="utf-8") as f:
                 estado = json.load(f)
-            projetos = os.path.join(os.path.expanduser("~"), ".claude", "projects", "*", str(estado.get("ccSessionId")) + ".jsonl")
-            achados += [(caminho, transcript) for transcript in glob.glob(projetos) if estado.get("cwd") == worktree]
+            if estado.get("cwd") == worktree:
+                achados.append((caminho, os.path.join(self.projeto_do_claude(), str(estado.get("ccSessionId")) + ".jsonl")))
         return achados
 
-    def quebrar_bridge(self):
-        achados = self.do_bridge()
+    def projeto_do_claude(self):
+        return os.path.join(os.path.expanduser("~"), ".claude", "projects", re.sub(r"[^A-Za-z0-9]", "-", self.meta()["worktree"]))
+
+    def perder_a_ponta(self):
+        achados = [par for par in self.do_bridge() if os.path.exists(par[1])]
         if not achados:
             raise Fail("drill", "não achei o transcript do bridge desta conversa")
-        transcript = max(achados, key=lambda par: os.path.getmtime(par[1]))[1]
-        with open(transcript, encoding="utf-8") as f:
+        retomada = crew.module("crew_retomada")
+        conversa = retomada.arquivo_da_conversa(self.meta(), retomada.conversa_de(self.meta()))
+        with open(conversa, encoding="utf-8") as f:
             linhas = f.read().splitlines()
-        with open(transcript, "w", encoding="utf-8") as f:
-            f.write("\n".join(linhas[:-2]) + "\n")
-        self.crew_py("tell", self.nome, "Responda apenas: ok")
+        perguntas = [i for i, linha in enumerate(linhas) if ((json.loads(linha).get("message") or {}).get("role")) == "user"]
+        if not perguntas:
+            raise Fail("drill", "a conversa do Pi em %s não tem mensagem do chief" % conversa)
+        crew.write_text(conversa, "\n".join(linhas[:perguntas[-1]]) + "\n")
+        open(max(achados, key=lambda par: os.path.getmtime(par[1]))[1], "w", encoding="utf-8").close()
+
+    def quebrar_bridge(self):
+        pid = self.estado_do_worker().get("pid")
+        self.herdr("pane", "close", self.meta()["pane"])
+        self.esperar(lambda: not crew.module("crew_causa").vivo(pid), ESPERA_DO_SERVIDOR, "o Pi sair com o painel fechado")
+        self.perder_a_ponta()
+        self.crew_py("retomar", self.nome)
         self.esperar(lambda: self.estado_do_worker().get("outcome"), ESPERA_DO_TURNO, "o bridge falhar")
         feito = self.crew_py("retomar", self.nome)
         if feito["causa"] != "conversa quebrada no bridge":
@@ -244,19 +258,25 @@ class Drill:
 
     def apagar_conversas(self):
         try:
-            pares = self.do_bridge()
-            caminhos = [caminho for par in pares for caminho in par]
-            pasta = crew.module("crew_retomada").pasta_das_conversas(self.meta())
+            estados = [estado for estado, _ in self.do_bridge()]
+            pastas = [crew.module("crew_retomada").pasta_das_conversas(self.meta()), self.projeto_do_claude()]
         except (OSError, ValueError, KeyError):
             return
-        for caminho in caminhos:
+        for caminho in estados + self.processos_do_claude():
             os.remove(caminho)
-        for projeto in {os.path.dirname(transcript) for _, transcript in pares}:
+        for pasta in pastas:
+            shutil.rmtree(pasta, ignore_errors=True)
+
+    def processos_do_claude(self):
+        achados = []
+        for caminho in glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "sessions", "*.json")):
             try:
-                os.rmdir(projeto)
-            except OSError:
-                pass
-        shutil.rmtree(pasta, ignore_errors=True)
+                with open(caminho, encoding="utf-8") as f:
+                    if json.load(f).get("cwd") == self.meta()["worktree"]:
+                        achados.append(caminho)
+            except (OSError, ValueError):
+                continue
+        return achados
 
     def passo(self, nome, funcao):
         try:
