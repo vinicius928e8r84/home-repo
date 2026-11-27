@@ -175,10 +175,20 @@ def fechar(nome):
         print(json.dumps(dict(ok=False, step="close", worker=nome, error=e.error)), flush=True)
 
 
+def mesclado_com_relatorio(meta):
+    visto = crew.file_state(os.path.join(crew.STATE, meta["name"], "watch.json"))
+    return visto.get("report") and visto.get("merged")
+
+
 def fechar_mesclados():
-    for meta in crew.workers():
-        visto = crew.file_state(os.path.join(crew.STATE, meta["name"], "watch.json"))
-        if visto.get("report") and visto.get("merged"):
+    prontos = [meta for meta in crew.workers() if mesclado_com_relatorio(meta)]
+    if not prontos:
+        return
+    dono = crew.module("crew_dono")
+    abertas = [d for d in crew.decisions().values() if d.get("status") == "open"]
+    paginas = dono.paginas_esperando(" ".join("%s %s" % (d["question"], d.get("recommend") or "") for d in abertas))
+    for meta in prontos:
+        if not dono.tem_pagina(meta["worktree"], paginas):
             fechar(meta["name"])
 
 
