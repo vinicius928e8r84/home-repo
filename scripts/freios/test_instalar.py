@@ -12,8 +12,8 @@ SLUG = "dono/alvo"
 
 
 class GhFalso:
-    def __init__(self, protecao=None, prs=()):
-        self.protecao = protecao
+    def __init__(self, protecao=None, prs=(), privado=False):
+        self.protecao, self.privado = protecao, privado
         self.prs = list(prs)
         self.chamados = []
 
@@ -30,12 +30,17 @@ class GhFalso:
             Path(comando[4]).mkdir(parents=True)
             return ""
         if comando[:3] == ["gh", "repo", "view"]:
-            return f"dono/{comando[3]}\n" if "nameWithOwner" in comando else "main\n"
+            return self.ver_repo(comando)
         if comando[:2] == ["gh", "api"] and comando[2].endswith("/protection"):
             if self.protecao is None:
                 raise instalar.Falha("gh api: Branch not protected (HTTP 404)")
             return json.dumps(self.protecao)
         return ""
+
+    def ver_repo(self, comando):
+        if "isPrivate" in comando:
+            return "true\n" if self.privado else "false\n"
+        return f"dono/{comando[3]}\n" if "nameWithOwner" in comando else "main\n"
 
     def escritas(self):
         return [c for c, _ in self.chamados if c[:3] in (["gh", "api", "-X"], ["gh", "pr", "create"]) or c[:2] == ["git", "push"]]
@@ -211,10 +216,18 @@ class Comando(unittest.TestCase):
         self.assertIn(["git", "push", "-q", "origin", "main"], comandos)
         self.assertFalse(any(c[:2] == ["gh", "pr"] for c in comandos))
 
-    def test_privado_nao_tenta_ligar_o_secret_scanning(self):
-        gh = GhFalso()
-        instalar.instalar(Argumentos(novo="alvo", privado=True, simular=False), gh, io.StringIO())
-        self.assertFalse(any(c[:4] == ["gh", "api", "-X", "PATCH"] for c in gh.escritas()))
+    def test_novo_privado_e_recusado_antes_de_criar(self):
+        erro = io.StringIO()
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(erro):
+            instalar.ler_argumentos(["--novo", "alvo", "--privado"])
+        self.assertIn("conta Free", erro.getvalue())
+
+    def test_repo_privado_existente_recebe_os_freios_sem_a_protecao_e_avisa(self):
+        gh, saida = GhFalso(privado=True), io.StringIO()
+        self.assertEqual(instalar.instalar(Argumentos(alvo=SLUG, simular=False), gh, saida), 0)
+        self.assertTrue(any(c[:3] == ["gh", "pr", "create"] for c in gh.escritas()))
+        self.assertFalse(any(c[:3] == ["gh", "api", "-X"] for c in gh.escritas()))
+        self.assertIn("ficaram de fora", saida.getvalue())
 
     def test_alvo_e_novo_juntos_sao_recusados(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):

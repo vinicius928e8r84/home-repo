@@ -12,7 +12,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 USO = """Põe os freios do home-repo num repositório do dono e liga a proteção dele no GitHub.
 
   instalar.py <dono/repo>                 instala ou atualiza num repo que já existe (abre uma PR)
-  instalar.py --novo <nome> [--privado]   cria o repo pelo gh repo create e já o entrega com os freios na main
+  instalar.py --novo <nome>               cria o repo público pelo gh repo create e já o entrega com os freios na main
   --simular                               mostra o que faria, sem criar, empurrar nem mudar nada no GitHub
 
 Copia scripts/freios, os ganchos (.githooks), os workflows Freios e Registro da PR e o modelo de PR.
@@ -20,7 +20,12 @@ limites.json, excecoes.json, ruff.toml e o modelo de PR são do repo: só nascem
 nova do home-repo entra sem mexer nas que o repo já tem). Um arquivo do repo que não é nenhuma versão do home-repo é
 próprio dele e fica como está. Depois liga o secret scanning e o push protection e protege a main exigindo os checks dos
 freios que os workflows do repo rodam, valendo também para admin, sem force push e sem apagar a branch. Num repo que já
-existe, quando a PR muda um workflow, a proteção da main espera a PR entrar: rode de novo depois de mesclar."""
+existe, quando a PR muda um workflow, a proteção da main espera a PR entrar: rode de novo depois de mesclar.
+Num repo privado que já existe, os freios entram, mas a proteção da main e o secret scanning ficam de fora (avisa)."""
+SEM_PRIVADO = (
+    "--novo --privado não cria nada: numa conta Free do GitHub, um repo privado não tem proteção da main nem secret "
+    "scanning, e ele nasceria sem esses freios. Crie sem --privado (público)."
+)
 COPIADOS = [
     "scripts/__init__.py",
     "scripts/freios/",
@@ -246,8 +251,12 @@ def preparar_pasta(slug, pasta, novo, rodar_=rodar):
     return rodar_(["gh", "repo", "view", slug, "--json", "defaultBranchRef", "-q", ".defaultBranchRef.name"]).strip()
 
 
-def criar_repo(nome, privado, rodar_=rodar):
-    rodar_(["gh", "repo", "create", nome, "--private" if privado else "--public"])
+def e_privado(slug, rodar_=rodar):
+    return rodar_(["gh", "repo", "view", slug, "--json", "isPrivate", "-q", ".isPrivate"]).strip() == "true"
+
+
+def criar_repo(nome, rodar_=rodar):
+    rodar_(["gh", "repo", "create", nome, "--public"])
     return rodar_(["gh", "repo", "view", nome, "--json", "nameWithOwner", "-q", ".nameWithOwner"]).strip()
 
 
@@ -284,13 +293,13 @@ def ler_argumentos(argv):
                                          formatter_class=argparse.RawDescriptionHelpFormatter)
     analisador.add_argument("alvo", nargs="?", help="dono/repo de um repo que já existe")
     analisador.add_argument("--novo", metavar="NOME", help="cria o repo antes de instalar")
-    analisador.add_argument("--privado", action="store_true", help="com --novo: cria privado (sem secret scanning)")
+    analisador.add_argument("--privado", action="store_true", help="recusado: " + SEM_PRIVADO)
     analisador.add_argument("--simular", action="store_true", help="não cria, não empurra, não muda nada no GitHub")
     args = analisador.parse_args(argv)
     if bool(args.alvo) == bool(args.novo):
         analisador.error("diga um repo que já existe (dono/repo) ou --novo <nome>, um dos dois")
-    if args.privado and not args.novo:
-        analisador.error("--privado só vale com --novo")
+    if args.privado:
+        analisador.error(SEM_PRIVADO)
     return args
 
 
@@ -303,6 +312,7 @@ class Plano:
     proprios: list = field(default_factory=list)
     chamadas: list = field(default_factory=list)
     adiada: bool = False
+    privado: bool = False
 
 
 def planejar(args, slug, pasta, rodar_=rodar):
@@ -311,10 +321,11 @@ def planejar(args, slug, pasta, rodar_=rodar):
     arquivos = arquivos_do_home(rodar_)
     proprios = [] if novo else proprios_do_alvo(pasta, arquivos, rodar_)
     plano = Plano(slug, pasta, ramo, copiar(pasta, slug, arquivos, proprios), proprios)
+    plano.privado = not novo and e_privado(slug, rodar_)
+    if plano.privado:
+        return plano
     atual = None if novo else protecao_atual(slug, ramo, rodar_)
     plano.chamadas = chamadas_de_protecao(slug, ramo, atual, checks_do_alvo(pasta))
-    if args.privado:
-        plano.chamadas = plano.chamadas[1:]
     plano.adiada = not novo and any(c.startswith(".github/workflows/") for c in plano.mudados)
     if plano.adiada:
         plano.chamadas = plano.chamadas[:1]
@@ -329,13 +340,16 @@ def relatar(plano, saida):
     if plano.adiada:
         saida.write("A proteção da main espera a PR entrar, porque ela muda os workflows dos checks: "
                     "rode de novo depois de mesclar.\n")
+    if plano.privado:
+        saida.write(f"Aviso: {plano.slug} é privado, e a conta Free do GitHub não dá a repo privado proteção da main nem "
+                    "secret scanning: os freios entram, mas a proteção e o secret scanning ficaram de fora.\n")
 
 
 def instalar(args, rodar_=rodar, saida=sys.stdout):
     novo = bool(args.novo)
     slug = args.alvo or args.novo
     if novo and not args.simular:
-        slug = criar_repo(args.novo, args.privado, rodar_)
+        slug = criar_repo(args.novo, rodar_)
     with tempfile.TemporaryDirectory() as temporaria:
         plano = planejar(args, slug, Path(temporaria) / "repo", rodar_)
         relatar(plano, saida)
@@ -348,7 +362,7 @@ def instalar(args, rodar_=rodar, saida=sys.stdout):
             saida.write(feito + "\n")
         for chamada in plano.chamadas:
             chamar(chamada, rodar_)
-        if not plano.adiada:
+        if not plano.adiada and not plano.privado:
             saida.write(f"Proteção ligada em {slug}: {', '.join(checks_do_alvo(plano.pasta))}, valendo também para admin.\n")
         saida.write("Em cada clone: git config core.hooksPath .githooks\n")
     return 0
