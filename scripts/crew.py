@@ -844,6 +844,8 @@ def main():
     s.add_argument("acao", choices=("add", "done"))
     s.add_argument("valor", help="the text of the item (add) or its id (done)")
     s.set_defaults(fn=lambda a: module("crew_dono").comando(a))
+    s = sub.add_parser("recursos", help="read memory, disk and processor of the PC, the VPS and the Mac, apply the Folga rule and write one file per machine (state/crew/_recursos-<machine>.json), with who holds the e2e and Mac locks")
+    s.set_defaults(fn=lambda a: module("crew_recursos").comando(a))
     s = sub.add_parser("status", help="every open worker, with live state, report and merge")
     s.add_argument("--all", action="store_true", help="include closed workers")
     s.set_defaults(fn=cmd_status)
