@@ -262,8 +262,8 @@ def start_pi(a, meta, home, extension):
     pane = "@%s:%s" % (host, pane)
     meta["pane"] = pane
     crew.write_meta(meta)
-    launch = 'export PATH="%s/bin:$PATH" && "%s/bin/pi" --approve -e "%s" --model %s:%s'
-    crew.herdr("agent", "pane", "run", pane, launch % (crew_home, crew_home, extension, meta["model"], meta["thinking"]))
+    launch = 'export PATH="%s/bin:$PATH" && "%s/bin/pi" --session-id %s --approve -e "%s" --model %s:%s'
+    crew.herdr("agent", "pane", "run", pane, launch % (crew_home, crew_home, meta["name"], extension, meta["model"], meta["thinking"]))
     wait_idle(meta, pane, a.start_timeout)
     crew.send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
 

@@ -49,6 +49,7 @@ class FakeHerdr:
         self.sent = {}
         self.typed = {}
         self.drop_texts = 0
+        self.launched = {}
         self.on_close = None
         self.state_files = {}
         self.next_pane = 0
@@ -94,6 +95,7 @@ class FakeHerdr:
         return {"result": {"pane": {"pane_id": pane}}}
 
     def pane_run(self, step, *args):
+        self.launched[args[2]] = args[3]
         self.panes[args[2]]["agent"] = "pi"
         self.write_state(args[2], "idle", 0)
         return {}
@@ -267,6 +269,10 @@ class SpawnDelivery(CrewCase):
         pane = result["pane"]
         self.assertEqual(len(self.herdr.sent.get(pane, [])), 1)
         self.assertEqual(json.load(open(result["state_file"]))["state"], "working")
+
+    def test_opens_pi_in_a_conversation_named_after_the_worker(self):
+        result = self.spawn()
+        self.assertIn("--session-id %s " % result["name"], self.herdr.launched[result["pane"]])
 
     def test_gives_up_loudly_when_the_message_never_arrives(self):
         self.herdr.drop_texts = 99

@@ -39,6 +39,24 @@ PY
 fi
 "$HERDR" --version
 
+step "herdr does not restore agents (the spawn command is the one way back; this holds for every herdr session here)"
+python3 - "${HERDR_CONFIG_PATH:-$HOME/.config/herdr/config.toml}" <<'PY'
+import os, re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+line = "resume_agents_on_restore = false"
+if re.search(r"(?m)^resume_agents_on_restore\s*=", text):
+    text = re.sub(r"(?m)^resume_agents_on_restore\s*=.*$", line, text)
+elif re.search(r"(?m)^\[session\]\s*$", text):
+    text = re.sub(r"(?m)^\[session\]\s*$", "[session]\n" + line, text, count=1)
+else:
+    text = text.rstrip("\n") + ("\n\n" if text.strip() else "") + "[session]\n" + line + "\n"
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w", encoding="utf-8") as f:
+    f.write(text)
+PY
+"$HERDR" config check
+
 step "systemd user service crew-herdr (session $SESSION)"
 cat > "$CREW_HOME/bin/crew-herdr-run" <<'EOF'
 #!/usr/bin/env bash

@@ -185,6 +185,7 @@ class RemoteCrewTest(unittest.TestCase):
         self.assertIn(self.vps + "/.local/share/crew/bin/pi", run[3])
         self.assertIn(self.vps + "/crew-state/crew-state.ts", run[3])
         self.assertIn("claude-bridge/claude-sonnet-5-5:high", run[3])
+        self.assertIn("--session-id home-toy ", run[3])
         self.assertTrue(run[3].startswith('export PATH="%s/.local/share/crew/bin:$PATH" && ' % self.vps), run[3])
         prompt = next(entry for entry in log if entry[:2] == ["pane", "send-text"])
         self.assertIn(self.vps + "/crew-state/home-toy/brief.md", prompt[3])
