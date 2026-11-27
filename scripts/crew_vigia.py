@@ -169,6 +169,9 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
     prs.refresh()
     crew.module("crew_firstmate").refresh()
     crew.module("crew_cota").refresh()
+    erro = crew.module("crew_recursos").refresh()
+    if erro:
+        print(json.dumps(dict(ok=False, step="recursos", error=erro)), flush=True)
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))
     sem_pr = sem_pr_esperada()
