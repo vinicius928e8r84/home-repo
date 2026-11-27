@@ -412,6 +412,7 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     seen = file_state(meta.get("state_file", ""))
     snap = dict(state=state, turns=seen.get("turns", 0), report=os.path.exists(meta["report"]), merged=False, stalled=False,
                 agent=agent, not_pi=bool(agent and agent != "pi"))
+    snap["cause"] = None if state == "gone" or meta.get("host") else module("crew_causa").da_parada(seen)
     before = file_state(os.path.join(STATE, meta["name"], "watch.json"))
     snap["had_turn"] = bool(snap["turns"] or before.get("turns") or before.get("had_turn"))
     snap["unstarted"] = module("crew_alarmes").nunca_comecou(meta, dict(seen, state=state), before, unstarted_minutes)
@@ -426,7 +427,7 @@ def snapshot(meta, fetch, stall_minutes=0, unstarted_minutes=UNSTARTED_MINUTES):
     return snap
 
 
-BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False, unstarted=False, agent=None, not_pi=False)
+BASELINE = dict(state="starting", turns=0, report=False, merged=False, stalled=False, unstarted=False, agent=None, not_pi=False, cause=None)
 
 
 def decisions():
@@ -778,6 +779,8 @@ def cmd_watch(a):
                 new.append(emit("stalled", name, minutes=a.stall))
             if snap["not_pi"] and not old["not_pi"]:
                 new.append(emit("not_pi", name, agent=snap["agent"]))
+            if snap["cause"] and snap["cause"] != old["cause"] and not read_meta(name).get("closing"):
+                new.append(emit("stopped", name, cause=snap["cause"]))
             if snap["unstarted"] and not old["unstarted"]:
                 new.append(emit("never_started", name, minutes=a.unstarted))
             write_text(seen_file, json.dumps(snap))
