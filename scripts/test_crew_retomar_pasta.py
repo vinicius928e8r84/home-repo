@@ -53,6 +53,26 @@ class PastaDasConversas(CrewCase):
         os.remove(self.meta["state_file"])
         self.assertEqual(self.pasta(), os.path.join("/agent", "sessions", pasta_da_sessao(self.meta["worktree"])))
 
+    def test_a_pasta_do_pi_segue_o_ambiente_dele_e_depois_a_variavel_do_processo(self):
+        self.estado()
+        self.assertEqual(self.retomada.pi_dir(self.meta), "/agent")
+        self.ambiente_do_pi = {"PI_CODING_AGENT_DIR": "/do-pi"}
+        self.assertEqual(self.retomada.pi_dir(self.meta), "/do-pi")
+        self.estado(agente="/gravada")
+        self.assertEqual(self.retomada.pi_dir(self.meta), "/gravada")
+        self.ambiente_do_pi = {}
+        self.assertEqual(self.retomada.pi_dir(), "/agent")
+
+    def test_so_as_conversas_do_worker_e_das_copias_dele(self):
+        pasta = os.path.join(self.tmp, "sessoes")
+        os.makedirs(pasta)
+        nomes = ["D_t-job.jsonl", "D_t-job-2.jsonl", "D_t-job-10.jsonl", "D_t-jobs.jsonl", "D_outro-t-job.jsonl", "D_t-job-x.jsonl"]
+        for nome in nomes:
+            open(os.path.join(pasta, nome), "w").close()
+        self.estado(sessoes=pasta)
+        achadas = sorted(os.path.basename(c) for c in self.retomada.conversas_do_worker(self.meta))
+        self.assertEqual(achadas, ["D_t-job-10.jsonl", "D_t-job-2.jsonl", "D_t-job.jsonl"])
+
     def test_le_o_ambiente_de_um_processo(self):
         leitor = self.crew.module("crew_retomada")
         self.assertEqual(leitor.ler_ambiente("A=1\0PI_CODING_AGENT_SESSION_DIR=/x=y\0\0"), {"A": "1", "PI_CODING_AGENT_SESSION_DIR": "/x=y"})

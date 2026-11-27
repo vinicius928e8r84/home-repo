@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 Fail = None
 crew = None
@@ -8,14 +9,15 @@ CAUSA_DO_BRIDGE = "conversa quebrada no bridge"
 SEM_CAUSA = "não registrada"
 ESPERA_DA_RESPOSTA = 120
 SESSOES = "PI_CODING_AGENT_SESSION_DIR"
+AGENTE = "PI_CODING_AGENT_DIR"
 
 
 def sessao():
     return crew.module("crew_sessao")
 
 
-def pi_dir():
-    return os.environ.get("PI_CODING_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
+def pi_dir(meta=None):
+    return variavel_do_pi(meta, AGENTE, "agente") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
 
 
 def ler_ambiente(bruto):
@@ -31,14 +33,21 @@ def ambiente_do_pi(pid):
         return {}
 
 
-def sessoes_do_pi(meta):
-    visto = crew.file_state(meta.get("state_file") or "")
-    do_pi = visto.get("sessoes") or ambiente_do_pi(visto.get("pid")).get(SESSOES)
-    return do_pi or os.environ.get(SESSOES)
+def variavel_do_pi(meta, variavel, campo):
+    visto = crew.file_state(meta.get("state_file") or "") if meta else {}
+    return visto.get(campo) or ambiente_do_pi(visto.get("pid")).get(variavel) or os.environ.get(variavel)
 
 
 def pasta_das_conversas(meta):
-    return sessoes_do_pi(meta) or os.path.join(pi_dir(), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+    plana = variavel_do_pi(meta, SESSOES, "sessoes")
+    return plana or os.path.join(pi_dir(meta), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+
+
+def conversas_do_worker(meta):
+    pasta = pasta_das_conversas(meta)
+    nomes = os.listdir(pasta) if os.path.isdir(pasta) else []
+    dele = re.compile(r"%s(-\d+)?\.jsonl" % re.escape(meta["name"]))
+    return [os.path.join(pasta, nome) for nome in nomes if dele.fullmatch(nome.partition("_")[2])]
 
 
 def conversa_de(meta):
