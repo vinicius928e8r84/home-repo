@@ -215,7 +215,7 @@ class CrewCase(unittest.TestCase):
             self.crew.cmd_watch(args)
 
     def told_chief(self):
-        inbox = os.path.join(self.state, "_chief", CHIEF.replace(":", "_") + ".inbox")
+        inbox = os.path.join(self.state, "_chief", "chief.inbox")
         if not os.path.exists(inbox):
             return []
         with open(inbox, encoding="utf-8") as f:

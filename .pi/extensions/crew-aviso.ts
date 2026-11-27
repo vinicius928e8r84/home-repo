@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
-import { chiefFolder, inboxOf } from "./lib/crew-chief.ts";
+import { chiefFolder, inboxOf, returnOf } from "./lib/crew-chief.ts";
 
 const POLL_MS = Number(process.env.CREW_AVISO_MS) || 2000;
 const RESUMO = "[resumo]";
+
+const sessionIdOf = (ctx: any): string | undefined => ctx?.sessionManager?.getSessionId?.();
 
 function takeLines(inbox: string): string[] {
   const taken = `${inbox}.taken`;
@@ -28,8 +30,8 @@ export default function (pi: any) {
     }
   };
 
-  const deliver = async (inbox: string) => {
-    const lines = takeLines(inbox);
+  const deliver = async (inbox: string, comeback: string | undefined) => {
+    const lines = [...(comeback ? takeLines(comeback) : []), ...takeLines(inbox)];
     await send(inbox, lines.filter((line) => line.startsWith(RESUMO)), false);
     await send(inbox, lines.filter((line) => !line.startsWith(RESUMO)), true);
   };
@@ -39,8 +41,9 @@ export default function (pi: any) {
     timer = undefined;
     const folder = chiefFolder(ctx?.cwd ?? process.cwd());
     if (!folder) return;
-    const inbox = inboxOf(folder);
-    timer = setInterval(() => void deliver(inbox), POLL_MS);
+    const inbox = inboxOf(folder, sessionIdOf(ctx));
+    const comeback = returnOf(folder, sessionIdOf(ctx));
+    timer = setInterval(() => void deliver(inbox, comeback), POLL_MS);
     timer.unref?.();
   });
 
