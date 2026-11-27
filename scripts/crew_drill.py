@@ -247,6 +247,7 @@ class Drill:
         self.perder_a_ponta()
         self.crew_py("retomar", self.nome)
         self.esperar(lambda: self.estado_do_worker().get("outcome"), ESPERA_DO_TURNO, "o bridge falhar")
+        erro = str(self.estado_do_worker()["outcome"].get("message"))[:160]
         feito = self.crew_py("retomar", self.nome)
         if feito["causa"] != "conversa quebrada no bridge":
             raise Fail("drill", "o bridge falhou por %r, não por conversa quebrada" % feito["causa"])
@@ -254,7 +255,7 @@ class Drill:
         self.copia = feito["copia"]
         if feito["copia"] == "funcionou":
             self.lembra_da_palavra()
-        return "a cópia da conversa %s: %s" % (feito["conversa"], feito["copia"])
+        return "o bridge quebrou (%s); a cópia da conversa %s: %s" % (erro, feito["conversa"], feito["copia"])
 
     def apagar_conversas(self):
         try:
@@ -273,7 +274,7 @@ class Drill:
             try:
                 with open(caminho, encoding="utf-8") as f:
                     if json.load(f).get("cwd") == self.meta()["worktree"]:
-                        achados.append(caminho)
+                        achados += [caminho] + glob.glob(caminho[:-len(".json")] + ".*.key")
             except (OSError, ValueError):
                 continue
         return achados
