@@ -53,6 +53,15 @@ class Prova:
         retomada = crew.module("crew_retomada")
         return ler(retomada.arquivo_da_conversa(dict(worktree=self.casa, name="chief"), "chief") or "")
 
+    def chegou(self, marca):
+        mensagens = []
+        for linha in self.conversa().splitlines():
+            entrada = json.loads(linha)
+            texto = str(entrada.get("content", ""))
+            if entrada.get("type") == "custom_message" and entrada.get("customType") == "crew" and marca in texto and PERGUNTA in texto:
+                mensagens.append(texto[:400])
+        return mensagens
+
     def preparar(self):
         detalhe = self.base.preparar()
         for extensao in EXTENSOES:
@@ -156,13 +165,12 @@ class Prova:
         morto = self.matar_o_pi()
         self.base.crew_py("ask", PERGUNTA, "--worker", self.base.nome, "--para", "dono", "--recommend", "sim")
         self.esperar_o_chief(morto)
-        self.base.esperar(lambda: self.conversa().count(PERGUNTA) >= 2, ESPERA_DA_VOLTA, "o aviso e o resumo chegarem ao Chief")
-        if "Causa da queda" not in self.conversa():
-            raise Fail("drill", "o Chief voltou sem a mensagem com a causa da queda")
+        self.base.esperar(lambda: self.chegou("Causa da queda") and self.chegou("aviso automático"), ESPERA_DA_VOLTA,
+                          "a mensagem de volta, com a pergunta no resumo, e o aviso da caixa chegarem ao Chief")
         antigas = [nome for nome in os.listdir(os.path.join(self.base.estado, "_chief")) if nome.endswith(".inbox") and nome != "chief.inbox"]
         if antigas:
             raise Fail("drill", "com a conversa chief aberta o aviso ainda foi para a caixa do painel: %s" % antigas)
-        return "o aviso da caixa e o resumo de volta chegaram ao Chief"
+        return "chegaram ao Chief reaberto, como mensagens do crew: %s" % " || ".join(self.chegou("Causa da queda") + self.chegou("aviso automático"))
 
     def duas_reaberturas_ao_mesmo_tempo(self):
         self.parar_vigia()
@@ -174,7 +182,8 @@ class Prova:
         if len(passaram) != 1 or self.reaberturas() != antes + 1:
             raise Fail("drill", "de duas reaberturas ao mesmo tempo devia passar uma; passaram %d: %s" % (len(passaram), saidas))
         self.esperar_o_chief(morto)
-        return "de duas reaberturas ao mesmo tempo, só uma passou"
+        recusa = [saida[0][0] or saida[0][1] for saida in saidas if saida[1] != 0]
+        return "de duas reaberturas ao mesmo tempo, só uma passou; a outra respondeu: %s" % " ".join(str(recusa[0]).split())[:300]
 
     def limpar(self):
         self.parar_vigia()
