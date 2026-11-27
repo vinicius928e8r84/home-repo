@@ -9,6 +9,7 @@ chief's pane inside Herdr.
   python scripts/crew.py spawn <repo> <task> --host vps ...   (the worker runs on that ssh host: scripts/crew_remote.py)
   python scripts/crew.py ask "question" --recommend "..." --para chief|dono   (a worker asks the chief or the owner)
   python scripts/crew.py answer D3 "the owner's answer"   (P3: the chief answers)
+  python scripts/crew.py dono add "text" | done L1   (the owner's own list, on top of `board`; kept outside the repo)
   python scripts/crew.py status
   python scripts/crew.py events
   python scripts/crew.py tell <name> "message"
@@ -521,6 +522,7 @@ def cmd_board(a):
         return dict(ok=True, decisions=open_decisions, questions=module("crew_conversa").open_questions(open_all), running=[slim(m) for m in running], review=[slim(m) for m in review], trouble=[slim(m) for m in trouble])
 
     out = ["# Time: %s" % datetime.datetime.now().strftime("%d/%m %H:%M"), ""]
+    out += module("crew_dono").linhas(open_decisions)
     out += module("crew_conversa").questions_lines(open_all)
     out.append("## Decisões esperando por você (%d)" % len(open_decisions))
     for d in sorted(open_decisions, key=lambda d: d["at"]):
@@ -839,6 +841,10 @@ def main():
     s.add_argument("id")
     s.add_argument("answer")
     s.set_defaults(fn=cmd_answer)
+    s = sub.add_parser("dono", help="the list of what only the owner can do, shown first on `board`: `dono add \"text\"` adds an item, `dono done <id>` marks it done")
+    s.add_argument("acao", choices=("add", "done"))
+    s.add_argument("valor", help="the text of the item (add) or its id (done)")
+    s.set_defaults(fn=lambda a: module("crew_dono").comando(a))
     s = sub.add_parser("status", help="every open worker, with live state, report and merge")
     s.add_argument("--all", action="store_true", help="include closed workers")
     s.set_defaults(fn=cmd_status)
