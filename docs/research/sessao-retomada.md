@@ -38,7 +38,7 @@ Fonte: [`docs/cli.md` (*Sessions*)](https://github.com/earendil-works/pi/blob/v1
 
 - **Extensões.** O `-e <arquivo>` vale só para o processo. Na retomada, o Pi carrega as extensões globais (`~/.pi/agent/extensions`) e as do projeto (`.pi/extensions`, se a pasta for confiável), e não o `crew-state.ts` do home-repo, que entra por `-e` nos outros repos.
 - **`--approve`.** "Trusts project-local configuration and resources for this process" ([`docs/cli.md`](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/cli.md)). Sem ele, o Pi segue o `~/.pi/agent/trust.json` ([`docs/security.md`, *How Pi chooses a trust decision*](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/docs/security.md#how-pi-chooses-a-trust-decision)):
-  - No PC, `C:\Users\sadvi\worktrees` está confiável, e a decisão da pasta-mãe vale para as filhas. Por isso a falta do `--approve` não trava o worker lá.
+  - No PC, `%USERPROFILE%\worktrees` está confiável, e a decisão da pasta-mãe vale para as filhas. Por isso a falta do `--approve` não trava o worker lá.
   - Na VPS, o `trust.json` não tem `~/worktrees`. Sem `--approve`, o Pi pergunta (no modo TUI) e o worker fica parado na pergunta.
 - **Variáveis de ambiente.** São do processo, e o Pi não as grava na sessão.
 
@@ -50,7 +50,7 @@ Fontes: [Session state and restore](https://raw.githubusercontent.com/herdrdev/h
 
 - `resume_agents_on_restore` vem ligado por padrão, e o `config.toml` do PC o liga explicitamente (`[session] resume_agents_on_restore = true`).
 - Para o pi, o comando vem de [`agent_resume.rs` linha 234](https://github.com/herdrdev/herdr/blob/v0.9.5/src/agent_resume.rs#L234): `("herdr:pi", "pi", Path | Id) => ["pi", "--session", <valor>]`. O valor é o caminho do `.jsonl` que a integração reportou (`herdr-agent-state.ts`, `reportSession` com `agent_session_path`).
-- O Herdr digita esse comando no shell do painel restaurado. **Testado:** depois de `herdr session stop crewtest` e de subir o servidor de novo, o painel mostrou `PS C:\…\crewtest-cwd> pi --session 'C:\Users\sadvi\.pi\agent\sessions\…\…_crewtest-a.jsonl'`. O shell do painel no Windows é o PowerShell.
+- O Herdr digita esse comando no shell do painel restaurado. **Testado:** depois de `herdr session stop crewtest` e de subir o servidor de novo, o painel mostrou `PS C:\…\crewtest-cwd> pi --session '~\.pi\agent\sessions\…\…_crewtest-a.jsonl'`. O shell do painel no Windows é o PowerShell.
 - A resposta não depende de um cliente conectado. O servidor sem interface (`herdr server`) também reabriu o pi.
 
 ### O que ele guarda e o que perde
