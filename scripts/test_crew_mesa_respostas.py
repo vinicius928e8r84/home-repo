@@ -164,6 +164,19 @@ class VigiaParadoNoMeio(MesaCase):
         self.rodada()
         self.assertEqual(len(self.mensagens_da_mesa()), 1)
 
+    def test_o_dono_ve_o_recebido_mesmo_com_a_queda_antes_da_entrega(self):
+        self.add_worker()
+        self.decisao()
+        self.lavish.polls = [feedback(resposta("usa o A"))]
+        original = self.cair_ao_avisar_o_chief()
+        with self.assertRaises(RuntimeError):
+            self.rodada()
+        self.assertEqual(self.lavish.com("reply"), [])
+        self.crew.tell_chief = original
+        self.rodada()
+        self.rodada()
+        self.assertEqual(self.lavish.com("reply"), [["lavish-axi", "reply", self.pagina, "--agent-reply", "Recebido."]])
+
     def test_a_entrega_pendente_nao_espera_o_lavish_voltar(self):
         self.add_worker()
         self.decisao()

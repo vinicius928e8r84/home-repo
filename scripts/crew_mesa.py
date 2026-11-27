@@ -156,6 +156,22 @@ def entregar_pendentes(chief):
         entregar(chief, item)
 
 
+def sem_recibo():
+    return [e for e in entradas().values() if e.get("origem") == "mesa" and e.get("entregue") and not e.get("recibo")]
+
+
+def dar_recibo():
+    pendentes = sem_recibo()
+    if not pendentes:
+        return None
+    codigo = ler_toon(lavish("reply", pagina(), "--agent-reply", RECIBO))["codigo"]
+    if codigo:
+        return "o recibo da Mesa deu %s" % codigo
+    for item in pendentes:
+        gravar_entrada(dict(n=item["n"], recibo=True))
+    return None
+
+
 def esc(texto):
     return html.escape(str(texto), quote=True)
 
@@ -291,9 +307,7 @@ def ouvir(chief):
         gravar_pagina()
     if resposta["encerrada"]:
         lavish(pagina(), "--reopen", "--no-open")
-    if resposta["prompts"]:
-        lavish("reply", pagina(), "--agent-reply", RECIBO)
-    return None
+    return dar_recibo()
 
 
 def paginas_antigas():
