@@ -236,6 +236,8 @@ def upload(meta, home, context_block):
     put(host, meta["remote_dir"] + "/ask.py", ASK_SCRIPT)
     extension = absolute(STATE_DIR, home) + "/crew-state.ts"
     put(host, extension, crew.file_text(crew.EXTENSION))
+    for name in re.findall(r'from "\./([^"]+)"', crew.file_text(crew.EXTENSION)):
+        put(host, os.path.dirname(extension) + "/" + name, crew.file_text(os.path.join(os.path.dirname(crew.EXTENSION), name)))
     return extension
 
 
