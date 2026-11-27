@@ -136,7 +136,7 @@ class CrewCase(unittest.TestCase):
             json.dump({"Test": dict(path=self.repo, remote="none", short="t", branch="pi/{task}", default_branch="main")}, f)
         saved = dict(os.environ)
         self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
-        os.environ.update(CREW_STATE_DIR=self.state, CREW_REPOS=repos, CREW_HERDR_SESSION="test", HERDR_PANE_ID=CHIEF,
+        os.environ.update(CREW_STATE_DIR=self.state, CREW_REPOS=repos, CREW_HERDR_SESSION="test", HERDR_PANE_ID=CHIEF, CREW_LAVISH_HOSTS="",
                           HOME=self.home, USERPROFILE=self.home, **GIT_ENV)
         spec = importlib.util.spec_from_file_location("crew_under_test", os.path.join(HERE, "crew.py"))
         self.crew = importlib.util.module_from_spec(spec)
