@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PANE = "w3:p3"
 HARNESS = """
-const [file, inbox, lines, throwing, wait] = process.argv.slice(1);
+const [file, inbox, lines, throwing, wait, folder, session, volta] = process.argv.slice(1);
 const fs = await import("node:fs");
 const handlers = {};
 const sent = [];
@@ -21,9 +21,10 @@ const pi = {
 };
 const { default: extension } = await import(new URL("file:///" + file.replace(/\\\\/g, "/")).href);
 extension(pi);
-await handlers.session_start?.({}, { cwd: process.argv[6] });
+await handlers.session_start?.({}, { cwd: folder, sessionManager: { getSessionId: () => session } });
 fs.mkdirSync(inbox.replace(/[^\\\\/]+$/, ""), { recursive: true });
 fs.writeFileSync(inbox, JSON.parse(lines).join("\\n") + "\\n");
+if (volta) fs.writeFileSync(inbox.replace(/inbox$/, "volta"), volta + "\\n");
 await new Promise((resolve) => setTimeout(resolve, Number(wait)));
 await handlers.session_shutdown?.();
 const left = fs.existsSync(inbox) ? fs.readFileSync(inbox, "utf8") : null;
@@ -36,15 +37,15 @@ class ExtensaoDeAviso(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="crew-aviso-")
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.inbox = os.path.join(self.tmp, "state", "_chief", "w3_p3.inbox")
+        self.inbox = os.path.join(self.tmp, "state", "_chief", "chief.inbox")
 
-    def entregar(self, extensao, linhas, falha=False, worker=False):
+    def entregar(self, extensao, linhas, falha=False, worker=False, conversa="chief", volta=""):
         env = {k: v for k, v in os.environ.items() if k not in ("CREW_STATE_FILE", "HERDR_ENV", "HERDR_PANE_ID")}
         env.update(HERDR_ENV="1", HERDR_PANE_ID=PANE, CREW_STATE_DIR=os.path.join(self.tmp, "state"), CREW_AVISO_MS="30")
         if worker:
             env["CREW_STATE_FILE"] = os.path.join(self.tmp, "state.json")
         arquivo = str(ROOT / ".pi" / "extensions" / extensao)
-        args = [arquivo, self.inbox, json.dumps(linhas), "1" if falha else "0", "600", str(ROOT)]
+        args = [arquivo, self.inbox, json.dumps(linhas), "1" if falha else "0", "600", str(ROOT), conversa, volta]
         feito = subprocess.run(["node", "--input-type=module", "-e", HARNESS, *args], capture_output=True, text=True, env=env,
                                encoding="utf-8", timeout=60, cwd=self.tmp)
         self.assertEqual(feito.returncode, 0, feito.stderr)
@@ -71,6 +72,16 @@ class ExtensaoDeAviso(unittest.TestCase):
 
     def test_falha_no_envio_devolve_as_linhas_para_a_caixa(self):
         saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], falha=True)
+        self.assertEqual(saida["sent"], [])
+        self.assertIn("[crew] erro: a", saida["left"])
+
+    def test_a_mensagem_de_volta_chega_antes_dos_avisos_da_caixa(self):
+        saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], volta="[crew] Retomada: voltou")
+        self.assertEqual(saida["sent"][0][0]["content"], "[crew] Retomada: voltou\n[crew] erro: a")
+        self.assertFalse(os.path.exists(self.inbox.replace("inbox", "volta")))
+
+    def test_conversa_que_nao_e_a_do_chief_nao_recebe_nada(self):
+        saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], conversa="teste-solto")
         self.assertEqual(saida["sent"], [])
         self.assertIn("[crew] erro: a", saida["left"])
 

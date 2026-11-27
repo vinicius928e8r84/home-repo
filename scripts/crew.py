@@ -143,7 +143,7 @@ def herdr(step, *args):
 def tell_chief(pane, text):
     folder = os.path.join(STATE, "_chief")
     os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".inbox"), "a", encoding="utf-8") as f:
+    with open(os.path.join(folder, "chief.inbox"), "a", encoding="utf-8") as f:
         f.write(" ".join(text.split()) + "\n")
 
 

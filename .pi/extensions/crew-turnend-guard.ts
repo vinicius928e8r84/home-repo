@@ -8,7 +8,7 @@ export default function (pi: any) {
   let followup = false;
 
   pi.on("session_start", async (_event: any, ctx: any) => {
-    cwd = chiefFolder(ctx?.cwd ?? process.cwd());
+    cwd = chiefFolder(ctx?.cwd ?? process.cwd(), ctx?.sessionManager?.getSessionId?.());
   });
 
   pi.on("agent_settled", async () => {
