@@ -50,9 +50,15 @@ class Drill:
         self.socket = os.path.join(self.env["XDG_CONFIG_HOME"], "herdr", "sessions", self.sessao, "herdr.sock")
 
     def shell_dos_paineis(self):
+        pi, bash = shutil.which("pi", path=self.env.get("PATH")), shutil.which("bash")
+        if not pi or not bash:
+            raise Fail("drill", "o drill precisa de `pi` e `bash` no PATH")
         volta = "export XDG_CONFIG_HOME=" + shlex.quote(os.environ["XDG_CONFIG_HOME"]) if "XDG_CONFIG_HOME" in os.environ else "unset XDG_CONFIG_HOME"
+        rc = os.path.join(self.pasta, "bashrc")
+        with open(rc, "w", encoding="utf-8") as f:
+            f.write('[ -f ~/.bashrc ] && . ~/.bashrc\nexport PATH=%s:"$PATH"\n' % shlex.quote(os.path.dirname(pi)))
         with open(self.env["SHELL"], "w", encoding="utf-8") as f:
-            f.write("#!/bin/sh\n%s\nexec %s \"$@\"\n" % (volta, shlex.quote(os.environ.get("SHELL") or "/bin/bash")))
+            f.write("#!/bin/sh\n%s\nexec %s --rcfile %s \"$@\"\n" % (volta, shlex.quote(bash), shlex.quote(rc)))
         os.chmod(self.env["SHELL"], 0o755)
 
     def rodar(self, argv):

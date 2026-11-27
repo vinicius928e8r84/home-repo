@@ -35,6 +35,10 @@ class Drill(CrewCase):
         with open(herdr, "w", encoding="utf-8") as f:
             f.write(HERDR_DE_MENTIRA)
         os.chmod(herdr, os.stat(herdr).st_mode | stat.S_IEXEC)
+        pi = os.path.join(self.bin, "pi")
+        with open(pi, "w", encoding="utf-8") as f:
+            f.write("#!/bin/sh\nexit 1\n")
+        os.chmod(pi, os.stat(pi).st_mode | stat.S_IEXEC)
         os.environ.update(PATH=self.bin + os.pathsep + os.environ["PATH"], DRILL_LOG=self.log, DRILL_RODANDO=os.path.join(self.tmp, "rodando"),
                           HERDR_ENV="1", HERDR_PANE_ID=CHIEF)
 
