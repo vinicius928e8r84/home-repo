@@ -17,7 +17,7 @@ class TesteDeAutoria(unittest.TestCase):
         self.repo = RepositorioTemporario()
         self.addCleanup(self.repo.limpar)
         self.repo.adicionar("a.txt", "base\n")
-        self.repo.commitar("base", email="outra@pessoa.com")
+        self.repo.commitar("base", email="outra@example.com")
         self.repo.git("branch", "base")
         self.contador = 0
 
@@ -57,7 +57,7 @@ class TesteDeAutoria(unittest.TestCase):
         self.assertIn("Co-authored-by", achados[0].detalhe)
 
     def test_coautor_em_minusculas_tambem_falha(self):
-        self.commitar("um\n\nco-authored-by: Alguem <a@b.com>")
+        self.commitar("um\n\nco-authored-by: Alguem <a@example.com>")
         self.assertEqual(len(self.verificar()[0]), 1)
 
     def test_committer_diferente_do_dono_falha_e_o_do_github_passa(self):
