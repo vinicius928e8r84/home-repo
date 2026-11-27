@@ -274,6 +274,8 @@ def spawn(a, job):
     host, name = job["host"], job["name"]
     home = ssh(host, 'printf %s "$HOME"', "host").strip()
     meta = describe(a, job, home)
+    if job.get("frente"):
+        meta["frente"] = job["frente"]
     if a.dry_run:
         return dict(ok=True, dry_run=True, **meta)
 
