@@ -262,7 +262,7 @@ class SpawnDelivery(CrewCase):
 
     def spawn(self):
         args = types.SimpleNamespace(repo="Test", task="job", type=None, model=None, request="do it", request_file=None, done="done",
-            context=None, host=None, start_timeout=5, prompt_timeout=10, dry_run=False)
+            context=None, host="local", start_timeout=5, prompt_timeout=10, dry_run=False)
         return self.crew.cmd_spawn(args)
 
     def test_resends_when_the_first_message_is_lost(self):

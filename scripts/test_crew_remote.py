@@ -157,7 +157,7 @@ class RemoteCrewTest(unittest.TestCase):
         self.assertEqual(result["worktree"], self.vps + "/worktrees/home-repo-toy")
         self.assertEqual(result["brief"], self.vps + "/crew-state/home-toy/brief.md")
         self.assertFalse(os.path.exists(self.vps + "/worktrees"))
-        result, _ = self.crew("spawn", "local_repo", "toy", "--request", "x", "--done", "y", "--dry-run")
+        result, _ = self.crew("spawn", "local_repo", "toy", "--request", "x", "--done", "y", "--dry-run", "--host", "local")
         self.assertNotIn("host", result)
         result, _ = self.crew("spawn", "local_repo", "toy", "--request", "x", "--done", "y", "--dry-run", "--host", "vps")
         self.assertEqual(result["host"], "vps")
