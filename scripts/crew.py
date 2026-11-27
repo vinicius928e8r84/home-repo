@@ -141,10 +141,7 @@ def herdr(step, *args):
 
 
 def tell_chief(pane, text):
-    folder = os.path.join(STATE, "_chief")
-    os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, re.sub(r"[^A-Za-z0-9_-]", "_", pane) + ".inbox"), "a", encoding="utf-8") as f:
-        f.write(" ".join(text.split()) + "\n")
+    module("crew_chief").avisar(pane, " ".join(text.split()))
 
 
 def passthrough():
@@ -749,7 +746,8 @@ def cmd_watch(a):
         os.makedirs(STATE, exist_ok=True)
         with open(HEARTBEAT, "w") as f:
             f.write(json.dumps(dict(at=now(), pid=os.getpid(), chief=chief)))
-        if not pane_alive(chief):
+        chief = module("crew_chief").seguir(chief)
+        if not chief:
             print(json.dumps(dict(ok=True, stopped="the chief's pane is gone")), flush=True)
             os.remove(HEARTBEAT)
             return dict(ok=True, stopped="chief gone")

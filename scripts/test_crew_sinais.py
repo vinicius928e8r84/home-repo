@@ -54,7 +54,7 @@ const pi = { on: (name, handler) => { handlers[name] = handler; } };
 process.argv = [process.execPath, "pi", "--approve"];
 const module = await import(pathToFileURL(process.env.EXTENSION).href);
 module.default(pi);
-const ctx = { cwd: process.env.PI_CWD, mode: process.env.PI_MODE, sessionManager: { getSessionFile: () => undefined, getSessionId: () => "sessao" } };
+const ctx = { cwd: process.env.PI_CWD, mode: process.env.PI_MODE, sessionManager: { getSessionFile: () => undefined, getSessionId: () => process.env.PI_SESSION_ID ?? "sessao" } };
 const read = () => (fs.existsSync(process.env.CREW_STATE_FILE) ? fs.readFileSync(process.env.CREW_STATE_FILE, "utf8") : null);
 
 const snapshots = [];

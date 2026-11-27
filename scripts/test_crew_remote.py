@@ -238,7 +238,7 @@ class RemoteCrewTest(unittest.TestCase):
         for _ in range(2):
             board, _ = self.crew("board", "--json")
         self.assertEqual(board["decisions"] + board["questions"], [])
-        with open(self.state + "/_chief/w3_p3.inbox", encoding="utf-8") as f:
+        with open(self.state + "/_chief/chief.inbox", encoding="utf-8") as f:
             self.assertEqual(f.read().splitlines(), ["[crew] home-toy avisa o chief: o aviso"])
 
     def test_an_ask_to_the_chief_still_needs_a_recommendation_on_the_host(self):
