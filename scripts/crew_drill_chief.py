@@ -43,7 +43,11 @@ class Prova:
         return self.estado().get("pid")
 
     def reaberturas(self):
-        return sum(1 for evento in crew.read_events() if evento and evento["kind"] == "chief_resumed")
+        return sum(1 for evento in self.eventos() if evento["kind"] == "chief_resumed")
+
+    def eventos(self):
+        linhas = ler(os.path.join(self.base.estado, "events.jsonl")).splitlines()
+        return [json.loads(linha) for linha in linhas if linha.strip()]
 
     def conversa(self):
         retomada = crew.module("crew_retomada")
@@ -125,7 +129,7 @@ class Prova:
         return pid
 
     def worker_parou(self):
-        return any(e and e["kind"] == "stopped" and e["worker"] == self.base.nome for e in crew.read_events())
+        return any(e["kind"] == "stopped" and e["worker"] == self.base.nome for e in self.eventos())
 
     def worker_caido_nao_reabre_o_chief(self):
         chief, antes = self.pid(), self.reaberturas()
