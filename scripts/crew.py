@@ -289,12 +289,12 @@ def route_for(task_type, model):
     return route["model"], route["thinking"]
 
 
-def deliver_brief(meta, pane, wait, tries=3):
+def deliver_brief(meta, pane, wait, tries=3, text=None):
     for attempt in range(tries):
         if attempt == 1:
             herdr("prompt", "pane", "send-keys", pane, "enter")
         else:
-            send("prompt", pane, "Leia o arquivo %s e siga-o." % meta["brief"])
+            send("prompt", pane, text or "Leia o arquivo %s e siga-o." % meta["brief"])
         deadline = time.time() + wait
         while time.time() < deadline:
             seen = file_state(meta["state_file"])
@@ -360,13 +360,8 @@ def cmd_spawn(a):
         f.write(BRIEF.format(home=posix(ROOT), context_block=context_block, **meta))
     write_meta(meta)
     try:
-        pane = find(herdr("pane", "tab", "create", "--workspace", crew_workspace(), "--cwd", worktree, "--label", name, "--no-focus",
-                          "--env", "CREW_STATE_FILE=" + meta["state_file"], "--env", "CREW_AGENT_NAME=" + name, *passthrough()), ("pane_id",))
-        if not pane:
-            raise Fail("pane", "Herdr did not return a pane id")
-        meta["pane"] = pane
-        write_meta(meta)
-        herdr("agent", "pane", "run", pane, 'pi --session-id %s --approve -e "%s" --model %s:%s' % (name, posix(EXTENSION), model, level))
+        retomada = module("crew_retomada")
+        pane = retomada.abrir_painel(meta, retomada.comando_do_pi(name, "%s:%s" % (model, level)))
         deadline = time.time() + a.start_timeout
         while file_state(meta["state_file"]).get("state") != "idle":
             if time.time() > deadline:
@@ -828,6 +823,7 @@ def main():
     s = sub.add_parser("board", help="the whole Time in one view: decisions waiting for the owner, running, ready to review, where each repo stopped")
     s.add_argument("--json", action="store_true", help="machine-readable instead of the text board")
     s.set_defaults(fn=cmd_board)
+    module("crew_retomada").registrar(sub)
     s = sub.add_parser("ask", help="a worker asks the chief (default) or records a decision for the owner (--para dono), and keeps working")
     s.add_argument("question")
     s.add_argument("--recommend", required=True, help="what the worker would do, and why")
