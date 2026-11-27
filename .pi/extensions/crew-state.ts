@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { CHIEF_SESSION, chiefDir } from "./lib/crew-chief.ts";
 
 function isHomeRepo(cwd: string): boolean {
   return fs.existsSync(path.join(cwd, "scripts", "crew.py"));
@@ -46,11 +47,10 @@ function replaceFile(target: string, text: string): void {
   }
 }
 
-function locate(cwd: string, pane: string | undefined): { file?: string; name?: string } {
+function locate(cwd: string, pane: string | undefined, sessionId: string | undefined): { file?: string; name?: string } {
   if (process.env.CREW_STATE_FILE) return { file: process.env.CREW_STATE_FILE, name: process.env.CREW_AGENT_NAME };
-  if (!pane || !isHomeRepo(cwd)) return {};
-  const dir = process.env.CREW_STATE_DIR || path.join(cwd, "state", "crew");
-  return { file: path.join(dir, "_chief", `${pane.replace(/[^A-Za-z0-9_-]/g, "_")}.json`), name: "chief" };
+  if (!pane || !isHomeRepo(cwd) || sessionId !== CHIEF_SESSION) return {};
+  return { file: path.join(chiefDir(cwd), "chief.json"), name: "chief" };
 }
 
 function createRecord(pane: string | undefined) {
@@ -127,7 +127,7 @@ export default function (pi: any) {
       inert = true;
       return;
     }
-    ({ file, name } = locate(ctx?.cwd ?? process.cwd(), pane));
+    ({ file, name } = locate(ctx?.cwd ?? process.cwd(), pane, ctx?.sessionManager?.getSessionId?.()));
     record.open(file);
     write("idle");
     if (file) stopBeat = startBeat(() => record.beat());

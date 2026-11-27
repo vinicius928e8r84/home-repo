@@ -185,3 +185,4 @@ def registrar(sub):
     s.add_argument("--start-timeout", type=int, default=90, help="seconds to wait for Pi to be ready")
     s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the message")
     s.set_defaults(fn=retomar)
+    crew.module("crew_chief").registrar(sub)
