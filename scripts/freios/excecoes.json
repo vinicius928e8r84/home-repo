@@ -26,6 +26,7 @@
   "sintaxe": [],
   "segredo": [],
   "binario": [],
+  "dados_pessoais": [],
   "depuracao": [
     {
       "glob": "scripts/check_routing.py",

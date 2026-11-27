@@ -6,7 +6,7 @@ from scripts.freios.apoio_de_teste import contexto_de_memoria
 from scripts.freios.contexto import PASTA
 
 CATEGORIAS = {
-    "tamanho", "funcoes", "comentarios", "sintaxe", "segredo", "binario", "depuracao", "ruff", "eslint",
+    "tamanho", "funcoes", "comentarios", "sintaxe", "segredo", "binario", "dados_pessoais", "depuracao", "ruff", "eslint",
 }
 
 
