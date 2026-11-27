@@ -137,6 +137,7 @@ class PaginaDaMesa(MesaCase):
             self.assertNotIn(nome, parados)
         self.assertIn("t-disco", parados)
         self.assertNotIn("t-disco", decisoes)
+        self.assertNotIn("<li><li>", decisoes)
 
     def test_decisao_aberta_traz_o_campo_de_resposta_e_a_recomendacao(self):
         self.add_worker()

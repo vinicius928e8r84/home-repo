@@ -197,7 +197,7 @@ def do_dono(linha):
 def bloco_do_dono(linhas):
     abertas = crew.module("crew_conversa").open_for_owner([d for d in crew.decisions().values() if d.get("status") == "open"])
     itens = [formulario(d) for d in sorted(abertas, key=lambda d: d["at"])]
-    itens += ["<li><b>%s</b> %s: só você resolve. Depois, o Chief retoma o worker.</li>" % (esc(x["nome"]), esc(x["estado"])) for x in linhas if do_dono(x)]
+    itens += ["<b>%s</b> %s: só você resolve. Depois, o Chief retoma o worker." % (esc(x["nome"]), esc(x["estado"])) for x in linhas if do_dono(x)]
     return secao("Decisões para você", lista(itens), "alerta" if itens else "")
 
 
