@@ -26,7 +26,7 @@ class TesteDosLinks(unittest.TestCase):
         self.assertEqual(self.verificar(arquivos), [])
 
     def test_endereco_externo_e_email_ficam_fora(self):
-        texto = "[a](https://x.com/a) [b](mailto:a@b.com) [c](C:/nada) [d](/absoluto)\n"
+        texto = "[a](https://x.com/a) [b](mailto:a@example.com) [c](C:/nada) [d](/absoluto)\n"
         self.assertEqual(self.verificar({"a.md": texto}), [])
 
     def test_link_dentro_de_codigo_fica_fora(self):
