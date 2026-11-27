@@ -42,6 +42,15 @@ Conferência, na VPS: `ps -eo pid,ppid,args | grep 'herdr.*server'` deve mostrar
 
 ## Retomada dos panes
 
-O `crew-state.ts` registra no Herdr, a cada mudança de estado, o comando que reabre o pane: `env` com `CREW_*`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` e `PATH` do pane, seguido de `pi` com os mesmos argumentos (`-e`, `--model`) e `--session <arquivo da sessão>`. Sem isso o Herdr reabre com `pi --session <arquivo>` pelo `PATH` de login, sem a extensão, sem o modelo e sem o `CREW_STATE_FILE`. O registro usa `--seq` maior que o da integração `herdr:pi`; sem ele o Herdr ignora o comando e ainda responde sucesso.
+O spawn abre o Worker com `pi --session-id <nome do Worker>`, então a Retomada acha a mesma conversa pelo nome. O `crew-state.ts` não registra mais no Herdr o comando que reabre o pane: o caminho para reabrir é um só, o comando do spawn.
 
-Workers que já rodam carregaram a extensão antiga e não registram o comando: só os abertos depois desta mudança voltam completos.
+Para o Herdr não reabrir os panes por conta própria (e perder o contexto, como em 23/11), o Herdr do PC fica com o restore de agentes desligado, no `config.toml` dele:
+
+```toml
+[session]
+resume_agents_on_restore = false
+```
+
+Para conferir: `herdr config check` deve responder `config: ok` (uma chave errada aparece como `unknown config key`), e a linha acima tem de estar no arquivo. Um Herdr já aberto só lê a mudança depois de `herdr server reload-config` ou de reiniciar.
+
+Workers abertos antes desta mudança carregaram a extensão antiga e ainda registram o comando de retomada no Herdr, e a conversa deles tem outro nome (o id é um UUID): só os abertos depois dela têm a conversa de nome fixo.
