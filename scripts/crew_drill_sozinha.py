@@ -56,6 +56,8 @@ class Prova:
 
     def subir_vigia(self):
         self.base.parar_batida.set()
+        time.sleep(1)
+        os.remove(os.path.join(self.base.estado, "watch.heartbeat"))
         registro = open(os.path.join(self.base.pasta, "vigia.log"), "a", encoding="utf-8")
         argv = [sys.executable, os.path.join(crew.ROOT, "scripts", "crew.py"), "watch", "--chief", self.base.env["HERDR_PANE_ID"], "--every", "5"]
         self.vigia = subprocess.Popen(argv, env=self.base.env, stdout=registro, stderr=registro, stdin=subprocess.DEVNULL)
