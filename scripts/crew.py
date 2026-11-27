@@ -141,10 +141,7 @@ def herdr(step, *args):
 
 
 def tell_chief(pane, text):
-    folder = os.path.join(STATE, "_chief")
-    os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, "chief.inbox"), "a", encoding="utf-8") as f:
-        f.write(" ".join(text.split()) + "\n")
+    module("crew_chief").avisar(pane, " ".join(text.split()))
 
 
 def passthrough():

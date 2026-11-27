@@ -1,12 +1,13 @@
 import datetime
 import json
 import os
+import re
 
 Fail = None
 crew = None
 
 CONVERSA = "chief"
-COMANDO = "pi --session-id " + CONVERSA
+COMANDO = "pi --session-id %s --approve" % CONVERSA
 TRAVA_SEGUNDOS = 300
 ESPERA_DO_PI = 90
 
@@ -17,6 +18,22 @@ def arquivo(sufixo):
 
 def visto():
     return crew.file_state(arquivo("json"))
+
+
+def conversa_aberta():
+    estado = visto()
+    return bool(estado) and estado.get("state") != "gone"
+
+
+def avisar(painel, linha):
+    pasta = os.path.join(crew.STATE, "_chief")
+    os.makedirs(pasta, exist_ok=True)
+    caixas = ["chief.inbox"]
+    if painel and not conversa_aberta():
+        caixas.append(re.sub(r"[^A-Za-z0-9_-]", "_", painel) + ".inbox")
+    for caixa in caixas:
+        with open(os.path.join(pasta, caixa), "a", encoding="utf-8") as f:
+            f.write(linha + "\n")
 
 
 def caiu(estado):

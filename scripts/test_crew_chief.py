@@ -90,7 +90,7 @@ class VigiaComOChiefFora(ChiefCase):
         for _ in range(3):
             self.rodada()
         self.assertEqual(len(self.herdr.abertas), 1)
-        self.assertEqual(self.herdr.launched[self.herdr.painel_novo], "pi --session-id chief")
+        self.assertEqual(self.herdr.launched[self.herdr.painel_novo], "pi --session-id chief --approve")
 
     def test_o_vigia_segue_sem_o_chief_e_guarda_os_avisos_na_caixa(self):
         self.escrever_chief()
@@ -216,3 +216,43 @@ class ReaberturaDoChief(ChiefCase):
         self.travar(MORTO)
         self.reabrir()
         self.assertEqual(len(self.herdr.abertas), 1)
+
+
+class TransicaoDoChiefAntigo(ChiefCase):
+    def caixa_do_painel(self):
+        caixa = os.path.join(self.state, "_chief", CHIEF.replace(":", "_") + ".inbox")
+        if not os.path.exists(caixa):
+            return []
+        with open(caixa, encoding="utf-8") as f:
+            return f.read().splitlines()
+
+    def test_sem_a_conversa_chief_o_aviso_vai_ao_painel_registrado_e_a_caixa_nova(self):
+        self.add_worker()
+        self.add_events([dict(kind="decision_needed", id="D7", question="Qual banco?")])
+        self.rodada()
+        self.assertIn("D7", self.caixa_do_painel()[0])
+        self.assertIn("D7", self.told_chief()[0])
+
+    def test_com_a_conversa_chief_aberta_vale_so_a_caixa_nova(self):
+        self.vivos.add(MORTO)
+        self.escrever_chief(beat=utc_minutes_ago(0))
+        self.add_worker()
+        self.add_events([dict(kind="decision_needed", id="D7", question="Qual banco?")])
+        self.rodada()
+        self.assertEqual(self.caixa_do_painel(), [])
+        self.assertIn("D7", self.told_chief()[0])
+
+    def test_com_a_conversa_chief_caida_o_aviso_espera_so_na_caixa_nova(self):
+        self.escrever_chief()
+        self.sobe = False
+        self.travar(os.getpid())
+        self.add_worker()
+        self.add_events([dict(kind="decision_needed", id="D7", question="Qual banco?")])
+        self.rodada()
+        self.assertEqual(self.caixa_do_painel(), [])
+        self.assertIn("D7", self.told_chief()[0])
+
+    def test_depois_que_a_conversa_chief_saiu_limpo_o_painel_volta_a_receber(self):
+        self.escrever_chief(state="gone")
+        self.crew.tell_chief(CHIEF, "[crew] aviso")
+        self.assertEqual(self.caixa_do_painel(), ["[crew] aviso"])

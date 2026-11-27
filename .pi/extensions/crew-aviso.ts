@@ -30,8 +30,8 @@ export default function (pi: any) {
     }
   };
 
-  const deliver = async (inbox: string, comeback: string) => {
-    const lines = [...takeLines(comeback), ...takeLines(inbox)];
+  const deliver = async (inbox: string, comeback: string | undefined) => {
+    const lines = [...(comeback ? takeLines(comeback) : []), ...takeLines(inbox)];
     await send(inbox, lines.filter((line) => line.startsWith(RESUMO)), false);
     await send(inbox, lines.filter((line) => !line.startsWith(RESUMO)), true);
   };
@@ -39,10 +39,10 @@ export default function (pi: any) {
   pi.on("session_start", async (_event: any, ctx: any) => {
     if (timer) clearInterval(timer);
     timer = undefined;
-    const folder = chiefFolder(ctx?.cwd ?? process.cwd(), sessionIdOf(ctx));
+    const folder = chiefFolder(ctx?.cwd ?? process.cwd());
     if (!folder) return;
-    const inbox = inboxOf(folder);
-    const comeback = returnOf(folder);
+    const inbox = inboxOf(folder, sessionIdOf(ctx));
+    const comeback = returnOf(folder, sessionIdOf(ctx));
     timer = setInterval(() => void deliver(inbox, comeback), POLL_MS);
     timer.unref?.();
   });

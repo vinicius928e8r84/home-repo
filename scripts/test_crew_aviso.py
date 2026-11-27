@@ -41,8 +41,9 @@ class ExtensaoDeAviso(unittest.TestCase):
 
     def entregar(self, extensao, linhas, falha=False, **opcoes):
         worker, conversa, volta = opcoes.get("worker", False), opcoes.get("conversa", "chief"), opcoes.get("volta", "")
+        self.inbox = os.path.join(self.tmp, "state", "_chief", opcoes.get("caixa", "chief.inbox"))
         env = {k: v for k, v in os.environ.items() if k not in ("CREW_STATE_FILE", "HERDR_ENV", "HERDR_PANE_ID")}
-        env.update(HERDR_ENV="1", HERDR_PANE_ID=PANE, CREW_STATE_DIR=os.path.join(self.tmp, "state"), CREW_AVISO_MS="30")
+        env.update(HERDR_ENV="1", HERDR_PANE_ID=opcoes.get("painel", PANE), CREW_STATE_DIR=os.path.join(self.tmp, "state"), CREW_AVISO_MS="30")
         if worker:
             env["CREW_STATE_FILE"] = os.path.join(self.tmp, "state.json")
         arquivo = str(ROOT / ".pi" / "extensions" / extensao)
@@ -83,6 +84,16 @@ class ExtensaoDeAviso(unittest.TestCase):
 
     def test_conversa_que_nao_e_a_do_chief_nao_recebe_nada(self):
         saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], conversa="teste-solto")
+        self.assertEqual(saida["sent"], [])
+        self.assertIn("[crew] erro: a", saida["left"])
+
+    def test_chief_aberto_a_moda_antiga_recebe_a_caixa_do_seu_painel(self):
+        saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], conversa="01a20882-antiga", caixa="w3_p3.inbox")
+        self.assertEqual(saida["sent"][0][0]["content"], "[crew] erro: a")
+        self.assertIsNone(saida["left"])
+
+    def test_pi_de_teste_em_outro_painel_nao_recebe_a_caixa_do_chief_antigo(self):
+        saida = self.entregar("crew-aviso.ts", ["[crew] erro: a"], conversa="teste-solto", caixa="w3_p3.inbox", painel="w5:p9")
         self.assertEqual(saida["sent"], [])
         self.assertIn("[crew] erro: a", saida["left"])
 
