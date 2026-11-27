@@ -121,7 +121,8 @@ def linha_de(meta, contexto):
     marca, estado = estado_de(meta, contexto, sessao)
     partes = ["%s %s" % (marca, meta["name"]), "%s · %s" % (meta["repo"], meta.get("type", "?")), modelo_e_esforco(meta, sessao, contexto), estado,
               "aberto %s" % hora(meta.get("started")), contexto_e_compactacoes(sessao, marca != "-" and estado != "painel fechou"), pr_de(meta, contexto)]
-    return dict(marca=marca, aberto=meta.get("started") or "", ocioso=estado.startswith("ocioso"), texto="  ".join(p for p in partes if p))
+    return dict(nome=meta["name"], marca=marca, estado=estado, aberto=meta.get("started") or "", ocioso=estado.startswith("ocioso"),
+                texto="  ".join(p for p in partes if p))
 
 
 def chave_de_ordem(linha):
@@ -140,16 +141,28 @@ def prs_do_vigia(estado):
     return achado if isinstance(achado, dict) else None
 
 
-def montar(metas, contexto):
+def ordenadas(metas, contexto):
     linhas = [linha_de(m, contexto) for m in metas if deve_aparecer(m, contexto["fechados"], contexto["agora"])]
     linhas.sort(key=chave_de_ordem)
+    return linhas
+
+
+def montar(metas, contexto):
+    linhas = ordenadas(metas, contexto)
     atencao = len([x for x in linhas if x["marca"] in "!?"])
     cabecalho = "Time: %d workers · %d precisam de atenção" % (len(linhas), atencao)
     return "\n".join([cabecalho] + [x["texto"] for x in linhas])
 
 
-def painel(metas, decisoes, estado, fechados=False):
+def contexto_de(decisoes, estado, fechados):
     pi_dir = os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent")
-    contexto = dict(estado=estado, decisoes=decisoes, pi_dir=pi_dir, fechados=fechados, prs=prs_do_vigia(estado),
-                    agora=datetime.datetime.now().astimezone())
-    return montar(metas, contexto)
+    return dict(estado=estado, decisoes=decisoes, pi_dir=pi_dir, fechados=fechados, prs=prs_do_vigia(estado),
+                agora=datetime.datetime.now().astimezone())
+
+
+def linhas(metas, decisoes, estado, fechados=False):
+    return ordenadas(metas, contexto_de(decisoes, estado, fechados))
+
+
+def painel(metas, decisoes, estado, fechados=False):
+    return montar(metas, contexto_de(decisoes, estado, fechados))

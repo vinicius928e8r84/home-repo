@@ -203,6 +203,9 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
     erro = crew.module("crew_recursos").refresh()
     if erro:
         print(json.dumps(dict(ok=False, step="recursos", error=erro)), flush=True)
+    erro = crew.module("crew_mesa").rodada(chief)
+    if erro:
+        print(json.dumps(dict(ok=False, step="mesa", error=erro)), flush=True)
     try:
         crew.module("crew_fila").rodada()
     except crew.Fail as e:
