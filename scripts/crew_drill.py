@@ -272,8 +272,7 @@ def drill(a):
 def comando(a):
     relatorio = drill(a)
     if not relatorio["ok"]:
-        print(json.dumps(relatorio, indent=2, ensure_ascii=False))
-        raise SystemExit(1)
+        raise Fail("drill", "; ".join("%s: %s" % (p["nome"], p["detalhe"] if not p["ok"] else "ok") for p in relatorio["passos"]))
     return relatorio
 
 

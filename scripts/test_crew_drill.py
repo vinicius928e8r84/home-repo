@@ -51,6 +51,13 @@ class Drill(CrewCase):
         self.assertFalse(relatorio["ok"])
         self.assertEqual([p["nome"] for p in relatorio["passos"] if not p["ok"]], ["abrir o Worker de teste"])
 
+    def test_the_command_fails_with_the_failed_step_in_the_error(self):
+        with self.assertRaises(self.crew.Fail) as caught:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.crew.module("crew_drill").comando(types.SimpleNamespace(model="x/y:low"))
+        self.assertEqual(caught.exception.step, "drill")
+        self.assertIn("preparar a sessão descartável: ok; abrir o Worker de teste:", caught.exception.error)
+
     def test_it_only_talks_to_its_own_disposable_herdr_session(self):
         relatorio = self.rodar()
         sessoes = {linha.split()[1] for linha in self.linhas()}
