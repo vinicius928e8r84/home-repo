@@ -287,6 +287,8 @@ def ouvir(chief):
         return "o poll da Mesa deu %s" % resposta["codigo"]
     guardar(resposta["prompts"], "mesa")
     entregar_pendentes(chief)
+    if resposta["prompts"]:
+        gravar_pagina()
     if resposta["encerrada"]:
         lavish(pagina(), "--reopen", "--no-open")
     if resposta["prompts"]:

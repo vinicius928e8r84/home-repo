@@ -68,6 +68,15 @@ class RespostaDoDono(MesaCase):
         self.assertIn("usa o A", mensagens[0])
         self.assertIn("t-job", mensagens[0])
 
+    def test_a_pagina_da_mesma_volta_ja_nao_traz_a_decisao_respondida(self):
+        self.add_worker()
+        self.decisao()
+        self.rodada()
+        self.assertIn("Qual banco usamos?", self.html())
+        self.lavish.polls = [feedback(resposta("usa o A"), fim=True)]
+        self.rodada()
+        self.assertNotIn("Qual banco usamos?", self.html())
+
     def test_o_dono_ve_o_recebido(self):
         self.add_worker()
         self.decisao()
