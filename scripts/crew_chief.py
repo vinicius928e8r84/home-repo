@@ -99,17 +99,22 @@ def workspace_do(painel):
     return crew.find(info, ("workspace_id",)) or crew.crew_workspace()
 
 
+def fechar(painel):
+    try:
+        crew.herdr("pane", "pane", "close", painel)
+    except Fail:
+        return
+
+
 def abrir_painel(antes):
     workspace = workspace_do(antes.get("pane"))
-    try:
-        crew.herdr("pane", "pane", "close", antes["pane"])
-    except (Fail, KeyError):
-        pass
     aba = crew.herdr("pane", "tab", "create", "--workspace", workspace, "--cwd", os.path.normpath(os.environ.get("CREW_CHIEF_DIR") or crew.ROOT), "--label", CONVERSA, "--no-focus",
                      *crew.passthrough())
     painel = crew.find(aba, ("pane_id",))
     if not painel:
         raise Fail("chief", "Herdr did not return a pane id")
+    if antes.get("pane"):
+        fechar(antes["pane"])
     crew.herdr("agent", "pane", "run", painel, COMANDO)
     return painel
 

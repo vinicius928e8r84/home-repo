@@ -25,6 +25,8 @@ class HerdrDoChief(FakeHerdr):
         return achado
 
     def tab_create(self, step, *args):
+        if not self.panes[CHIEF]["alive"] and args[args.index("--workspace") + 1] == "w4":
+            raise self.crew.Fail(step, "workspace w4 not found")
         self.next_pane += 1
         self.painel_novo = "w9:p%d" % self.next_pane
         self.panes[self.painel_novo] = dict(alive=True, agent=None)
@@ -134,6 +136,12 @@ class ReaberturaDoChief(ChiefCase):
         self.assertEqual(argumentos[argumentos.index("--workspace") + 1], "w4")
         self.assertFalse(self.herdr.panes[CHIEF]["alive"])
         self.assertEqual((feito["causa"], feito["conversa"], feito["pane"]), ("Pi saiu", "chief", self.herdr.painel_novo))
+
+    def test_o_painel_velho_so_fecha_depois_da_aba_nova_porque_o_workspace_some_com_o_ultimo_painel(self):
+        self.escrever_chief()
+        feito = self.reabrir()
+        self.assertEqual(feito["pane"], self.herdr.painel_novo)
+        self.assertFalse(self.herdr.panes[CHIEF]["alive"])
 
     def test_abre_na_pasta_do_chief_quando_o_drill_a_indica(self):
         os.environ["CREW_CHIEF_DIR"] = os.path.join(self.tmp, "casa")
