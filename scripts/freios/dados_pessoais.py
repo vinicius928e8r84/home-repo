@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 import unicodedata
@@ -45,30 +46,32 @@ def _dominio_de_exemplo(dominio):
     return any(dominio == base or dominio.endswith("." + base) for base in DOMINIOS_DE_EXEMPLO)
 
 
-def _email_pessoal(linha):
+def _emails_pessoais(linha):
+    valores = []
     for achado in EMAIL.finditer(linha):
         local = achado.group(0).rsplit("@", 1)[0].lower()
         if local not in ENDERECOS_SEM_DONO and not _dominio_de_exemplo(achado.group(1).lower()):
-            return True
-    return False
+            valores.append(achado.group(0).lower())
+    return valores
 
 
-def _ip_real(linha):
+def _ips_reais(linha):
+    valores = []
     for achado in IP.finditer(linha):
         octetos = tuple(int(parte) for parte in achado.groups())
         if max(octetos) > 255 or octetos[0] in PRIMEIROS_OCTETOS_DE_EXEMPLO or octetos[:3] in FAIXAS_DE_DOCUMENTACAO:
             continue
-        return True
-    return False
+        valores.append(achado.group(0))
+    return valores
 
 
 def _nome_de_pessoa(nome):
     return not (nome.startswith(INICIO_DE_MARCADOR) or nome.lower() in PASTAS_GENERICAS)
 
 
-def _caminho_pessoal(linha):
+def _caminhos_pessoais(linha):
     achados = list(CAMINHO_NO_WINDOWS.finditer(linha)) + list(CAMINHO_NO_MAC.finditer(linha))
-    return any(_nome_de_pessoa(achado.group(1)) for achado in achados)
+    return [achado.group(1).lower() for achado in achados if _nome_de_pessoa(achado.group(1))]
 
 
 def _dobrar(texto):
@@ -96,23 +99,26 @@ def _nomes_da_lista(ctx):
 
 
 def _tipos_da_linha(linha, nomes):
-    tipos = []
-    if "@" in linha and _email_pessoal(linha):
-        tipos.append("e-mail")
-    if "." in linha and _ip_real(linha):
-        tipos.append("endereço IP")
-    if "users" in linha.lower() and _caminho_pessoal(linha):
-        tipos.append("caminho com o nome de um usuário")
-    if nomes and nomes.search(_dobrar(linha)):
-        tipos.append("nome da lista de nomes proibidos")
-    return tipos
+    tipos = [
+        ("e-mail", _emails_pessoais(linha) if "@" in linha else []),
+        ("endereço IP", _ips_reais(linha) if "." in linha else []),
+        ("caminho com o nome de um usuário", _caminhos_pessoais(linha) if "users" in linha.lower() else []),
+        ("nome da lista de nomes proibidos", nomes.findall(_dobrar(linha)) if nomes else []),
+    ]
+    return [(tipo, valores) for tipo, valores in tipos if valores]
+
+
+def _grupo(caminho, tipo, valores):
+    resumo = hashlib.sha256("\n".join(sorted(set(valores))).encode("utf-8")).hexdigest()[:16]
+    return f"{caminho}#{tipo}#{resumo}"
 
 
 def _achados_do_texto(caminho, texto, nomes):
     achados = []
     for numero, linha in enumerate(texto.split("\n"), start=1):
-        for tipo in _tipos_da_linha(linha, nomes):
-            achados.append(Achado(ID, caminho, f"{tipo} (o valor não é mostrado)", numero))
+        for tipo, valores in _tipos_da_linha(linha, nomes):
+            detalhe = f"{tipo} (o valor não é mostrado)"
+            achados.append(Achado(ID, caminho, detalhe, numero, grupo=_grupo(caminho, tipo, valores)))
     return achados
 
 

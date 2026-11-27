@@ -248,6 +248,18 @@ class TesteDosDadosPessoaisNaCatraca(unittest.TestCase):
         self.assertIn("Conserto:", saida)
         self.assertNotIn("fulana", saida)
 
+    def test_trocar_o_dado_da_main_por_outro_reprova(self):
+        self.na_main({"a.md": EMAIL_PESSOAL + NL})
+        self.repo.adicionar("a.md", "outra" + "@" + "provedor.com" + NL)
+        codigo, saida = self.rodar()
+        self.assertEqual(codigo, 1, saida)
+        self.assertIn("a.md:1", saida)
+
+    def test_mudar_de_linha_o_dado_da_main_passa(self):
+        self.na_main({"a.md": EMAIL_PESSOAL + NL})
+        self.repo.adicionar("a.md", "oi" + NL + "fale com " + EMAIL_PESSOAL + NL)
+        self.assertEqual(self.rodar()[0], 0)
+
     def test_tirar_o_dado_passa(self):
         self.na_main({"a.md": EMAIL_PESSOAL + NL})
         self.repo.adicionar("a.md", "oi" + NL)
