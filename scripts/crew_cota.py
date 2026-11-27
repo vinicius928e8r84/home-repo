@@ -13,11 +13,14 @@ ESPERA_APOS_FALHA = 60
 LIMITE_DA_LEITURA = 60
 JANELAS = {"five_hour": "5h", "seven_day": "7d"}
 HOSTS = {"win32": "pc", "darwin": "mac"}
-ULTIMA_TENTATIVA = {}
 
 
 def arquivo():
     return os.path.join(crew.STATE, "_cota.json")
+
+
+def arquivo_da_tentativa():
+    return os.path.join(crew.STATE, "cota-tentativa.json")
 
 
 def agora_utc():
@@ -96,17 +99,22 @@ def da_leitura(saida):
                 limitante=max(usos, key=usos.get), janelas=janelas, extra=extra_de(achadas.get("extra_usage")))
 
 
+def gravar(caminho, dados):
+    os.makedirs(crew.STATE, exist_ok=True)
+    crew.write_text(caminho, json.dumps(dados, ensure_ascii=False))
+
+
 def refresh():
     if not velha(ler_arquivo()):
         return
     agora = crew.time.time()
-    if agora - ULTIMA_TENTATIVA.get("t", -ESPERA_APOS_FALHA) < ESPERA_APOS_FALHA:
+    anterior = crew.file_state(arquivo_da_tentativa())
+    if agora - anterior.get("t", -ESPERA_APOS_FALHA) < ESPERA_APOS_FALHA:
         return
-    ULTIMA_TENTATIVA["t"] = agora
     try:
-        leitura = da_leitura(ler())
+        leitura, erro = da_leitura(ler()), None
     except Fail as e:
-        print(json.dumps(dict(ok=False, step=e.step, error=e.error), ensure_ascii=False), flush=True)
-        return
-    os.makedirs(crew.STATE, exist_ok=True)
-    crew.write_text(arquivo(), json.dumps(leitura))
+        leitura, erro = None, e.error
+    gravar(arquivo_da_tentativa(), dict(t=agora, at=crew.now(), erro=erro))
+    if leitura:
+        gravar(arquivo(), leitura)

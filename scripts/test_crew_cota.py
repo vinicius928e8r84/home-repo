@@ -164,6 +164,10 @@ class Vigia(VigiaCase):
         with open(os.path.join(self.state, "_cota.json"), encoding="utf-8") as f:
             return json.load(f)
 
+    def tentativa(self):
+        with open(os.path.join(self.state, "cota-tentativa.json"), encoding="utf-8") as f:
+            return json.load(f)
+
     def test_leitura_de_mais_de_15_min_e_refeita_pelo_quota_axi(self):
         self.grava(16)
         self.rodada()
@@ -218,6 +222,7 @@ class Vigia(VigiaCase):
         avisos = self.rodada()
         self.assertEqual(self.arquivo()["fonte"], "bridge")
         self.assertEqual(len(avisos), 1)
+        self.assertEqual(self.tentativa()["erro"], "sem rede")
 
     def test_depois_de_uma_falha_o_vigia_espera_um_minuto_para_tentar_de_novo(self):
         self.quota_axi = self.crew.Fail("cota", "sem rede")
@@ -231,6 +236,7 @@ class Vigia(VigiaCase):
         self.quota_axi = {"providers": [{"provider": "claude", "notSetUp": True, "windows": []}]}
         self.rodada()
         self.assertFalse(os.path.exists(os.path.join(self.state, "_cota.json")))
+        self.assertIn("conta Claude", self.tentativa()["erro"])
 
 
 if __name__ == "__main__":
