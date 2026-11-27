@@ -55,7 +55,7 @@ function locate(cwd: string, pane: string | undefined, sessionId: string | undef
 
 function createRecord(pane: string | undefined) {
   let file: string | undefined;
-  const body = { state: "idle", turns: 0, at: "", pane: pane ?? null, pid: process.pid, outcome: null as Outcome, beat: "" };
+  const body = { state: "idle", turns: 0, at: "", pane: pane ?? null, pid: process.pid, outcome: null as Outcome, beat: "", sessoes: process.env.PI_CODING_AGENT_SESSION_DIR ?? null };
   const save = () => {
     if (!file) return;
     try {

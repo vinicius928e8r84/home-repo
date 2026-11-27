@@ -7,6 +7,7 @@ crew = None
 CAUSA_DO_BRIDGE = "conversa quebrada no bridge"
 SEM_CAUSA = "não registrada"
 ESPERA_DA_RESPOSTA = 120
+SESSOES = "PI_CODING_AGENT_SESSION_DIR"
 
 
 def sessao():
@@ -17,8 +18,27 @@ def pi_dir():
     return os.environ.get("PI_CODING_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
 
 
+def ler_ambiente(bruto):
+    pares = (item.partition("=") for item in bruto.split("\0") if "=" in item)
+    return {nome: valor for nome, _, valor in pares}
+
+
+def ambiente_do_pi(pid):
+    try:
+        with open("/proc/%s/environ" % pid, encoding="utf-8", errors="replace") as f:
+            return ler_ambiente(f.read())
+    except OSError:
+        return {}
+
+
+def sessoes_do_pi(meta):
+    visto = crew.file_state(meta.get("state_file") or "")
+    do_pi = visto.get("sessoes") or ambiente_do_pi(visto.get("pid")).get(SESSOES)
+    return do_pi or os.environ.get(SESSOES)
+
+
 def pasta_das_conversas(meta):
-    return os.path.join(pi_dir(), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+    return sessoes_do_pi(meta) or os.path.join(pi_dir(), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
 
 
 def conversa_de(meta):
