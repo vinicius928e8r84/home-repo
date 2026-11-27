@@ -14,6 +14,8 @@ chief's pane inside Herdr.
   python scripts/crew.py tell <name> "message"
   python scripts/crew.py read <name>
   python scripts/crew.py close <name>
+  python scripts/crew.py retomar <name>   (reopen a stopped worker in the same conversation and tell it why it stopped)
+  python scripts/crew.py drill            (prove the Retomada with real Herdr and Pi, in a disposable Herdr session; run it on the VPS)
   python scripts/crew.py watch          (spawn starts it by itself, hidden)
   python scripts/crew.py guard          (the chief's turn-end hook runs it: no worker left unwatched)
 
