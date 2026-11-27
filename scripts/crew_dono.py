@@ -6,7 +6,7 @@ Fail = None
 crew = None
 
 TITULO = "## Precisa do dono"
-HORAS_DE_ESPERA = 72
+DIAS_DE_ESPERA = 7
 NADA = "nada precisa de você agora"
 LER_ESTADO_DO_LAVISH = 'cat "${LAVISH_AXI_STATE_DIR:-$HOME/.lavish-axi}/state.json" 2>/dev/null || echo "{}"'
 
@@ -50,12 +50,21 @@ def comando(a):
 
 def recente(sessao):
     parado = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(sessao["updated_at"].replace("Z", "+00:00"))
-    return parado < datetime.timedelta(hours=HORAS_DE_ESPERA)
+    return parado < datetime.timedelta(days=DIAS_DE_ESPERA)
 
 
-def paginas_abertas(texto):
+def espera_o_dono(sessao, decisoes):
+    if sessao.get("status") != "open":
+        return False
+    if sessao.get("url") and sessao["url"] in decisoes:
+        return True
+    chat = sessao.get("chat") or []
+    return recente(sessao) and not (chat and chat[-1].get("role") == "user")
+
+
+def paginas_abertas(texto, decisoes=""):
     sessoes = json.loads(texto).get("sessions", {}).values()
-    return [(os.path.splitext(os.path.basename(s["file"].replace("\\", "/")))[0], s.get("url")) for s in sessoes if s.get("status") == "open" and recente(s)]
+    return [(os.path.splitext(os.path.basename(s["file"].replace("\\", "/")))[0], s.get("url")) for s in sessoes if espera_o_dono(s, decisoes)]
 
 
 def hosts():
@@ -71,11 +80,11 @@ def ler_de(host):
     return crew.remote().ssh(host, LER_ESTADO_DO_LAVISH, "lavish")
 
 
-def paginas():
+def paginas(decisoes):
     achadas, avisos = [], []
     for onde, ler in [("o PC", ler_do_pc)] + [(h, lambda h=h: ler_de(h)) for h in hosts()]:
         try:
-            achadas += paginas_abertas(ler())
+            achadas += paginas_abertas(ler(), decisoes)
         except (Fail, ValueError, KeyError) as e:
             avisos.append("não consegui ler as páginas lavish de %s: %s" % (onde, getattr(e, "error", e)))
     return achadas, avisos
@@ -86,7 +95,7 @@ def linhas(decisoes_abertas):
     itens = []
     for d in sorted(decisoes_abertas, key=lambda d: d["at"]):
         itens.append("- **%s** [%s] %s. Responder: `python scripts/crew.py answer %s \"...\"`" % (d["id"], d["worker"], crew.first_line(d["question"]), d["id"]))
-    achadas, avisos = paginas()
+    achadas, avisos = paginas(" ".join("%s %s" % (d["question"], d.get("recommend") or "") for d in decisoes_abertas))
     for nome, link in achadas:
         itens.append("- **página** [%s] responder na página%s" % (nome, " — " + link if link else ""))
     for item in itens_locais().values():

@@ -21,8 +21,9 @@ def horas_atras(n):
     return (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=n)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def sessao(arquivo, link, status="open", pendentes=0, horas=1):
-    return dict(key=link[-16:], file=arquivo, url=link, status=status, pending_prompts=pendentes, prompts=[], updated_at=horas_atras(horas))
+def sessao(arquivo, link, status="open", **opcoes):
+    chat = [dict(role=r, text="...") for r in opcoes.get("chat", ())]
+    return dict(key=link[-16:], file=arquivo, url=link, status=status, prompts=[], updated_at=horas_atras(opcoes.get("horas", 1)), chat=chat)
 
 
 def estado(*sessoes):
@@ -112,23 +113,39 @@ class PaginasLavish(DonoCase):
         self.assertIn(LINK_PC, linha)
 
     def test_pagina_ja_respondida_ou_encerrada_nao_aparece(self):
-        self.paginas_no_pc(sessao("a/ja-respondida.html", LINK_PC[:-1] + "1", status="feedback", pendentes=1),
+        self.paginas_no_pc(sessao("a/ja-respondida.html", LINK_PC[:-1] + "1", status="feedback"),
                            sessao("a/encerrada.html", LINK_PC[:-1] + "2", status="ended"))
         texto = self.secao()
         self.assertNotIn("ja-respondida", texto)
         self.assertNotIn("encerrada", texto)
         self.assertIn("nada precisa de você agora", texto)
 
-    def test_pagina_aberta_ha_mais_de_tres_dias_conta_como_abandonada(self):
-        self.paginas_no_pc(sessao("a/velha.html", LINK_PC, horas=73), sessao("a/recente.html", LINK_PC[:-1] + "2", horas=71))
+    def test_pagina_mexida_ha_mais_de_sete_dias_conta_como_abandonada(self):
+        self.paginas_no_pc(sessao("a/velha.html", LINK_PC, horas=7 * 24 + 1), sessao("a/recente.html", LINK_PC[:-1] + "2", horas=7 * 24 - 1))
         texto = self.secao()
         self.assertNotIn("velha", texto)
         self.assertIn("recente", texto)
 
+    def test_quem_tem_a_vez_e_o_worker_quando_a_ultima_mensagem_e_do_dono(self):
+        self.paginas_no_pc(sessao("a/o-dono-falou.html", LINK_PC, chat=("agent", "user")),
+                           sessao("a/o-agente-falou.html", LINK_PC[:-1] + "2", chat=("user", "agent")),
+                           sessao("a/sem-conversa.html", LINK_PC[:-1] + "3"))
+        texto = self.secao()
+        self.assertNotIn("o-dono-falou", texto)
+        self.assertIn("o-agente-falou", texto)
+        self.assertIn("sem-conversa", texto)
+
+    def test_pagina_ligada_a_uma_decisao_aberta_conta_em_qualquer_idade(self):
+        self.decisao("escolha na página %s" % LINK_PC)
+        self.paginas_no_pc(sessao("a/antiga.html", LINK_PC, horas=90 * 24, chat=("user",)))
+        self.assertIn("antiga", self.secao())
+        self.crew.cmd_answer(types.SimpleNamespace(id="D1", answer="a primeira"))
+        self.assertNotIn("antiga", self.secao())
+
     def test_a_pagina_sai_sozinha_quando_o_dono_responde(self):
         self.paginas_no_pc(sessao("a/rodada.html", LINK_PC))
         self.assertIn("rodada", self.secao())
-        self.paginas_no_pc(sessao("a/rodada.html", LINK_PC, status="feedback", pendentes=1))
+        self.paginas_no_pc(sessao("a/rodada.html", LINK_PC, chat=("user",)))
         self.assertNotIn("rodada", self.secao())
 
     def test_pagina_aberta_na_vps_aparece_com_o_link_dela(self):
