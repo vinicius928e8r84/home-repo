@@ -19,6 +19,7 @@ ACORDAM = {
     "PR pronta para revisão": {"pr_ready_review"},
     "PR pronta para merge": {"pr_ready_merge"},
     "branch mesclada": {"merged"},
+    "Tarefa esperando Folga": {"fila_espera"},
 }
 SEM_PR = "relatório sem PR"
 TEXTOS = {
@@ -107,6 +108,8 @@ def texto(evento):
         return texto_do_pedido(evento)
     if tipo == "firstmate_reply":
         return "respondeu à nota «%s»: %s" % (" ".join(evento.get("note", "").split())[:TITULO_MAXIMO], " ".join(evento.get("reply", "").split())[:RESPOSTA_MAXIMA])
+    if tipo == "fila_espera":
+        return "%s: espera na Fila há %d min (%s)" % (evento["worker"], evento.get("minutos", 0), evento.get("motivo"))
     if tipo == "stopped":
         return "%s: parou, causa: %s" % (evento["worker"], evento.get("cause"))
     if tipo.startswith("pr_ready"):
@@ -167,10 +170,10 @@ def resumir(chief, eventos, minutos, sem_pr):
     crew.write_text(caminho, json.dumps(visto))
 
 
-def fechar(nome):
+def fechar(nome, force=False):
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            crew.cmd_close(types.SimpleNamespace(name=nome, force=False))
+            crew.cmd_close(types.SimpleNamespace(name=nome, force=force))
     except crew.Fail as e:
         print(json.dumps(dict(ok=False, step="close", worker=nome, error=e.error)), flush=True)
 
@@ -203,6 +206,10 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
     erro = crew.module("crew_mesa").rodada(chief)
     if erro:
         print(json.dumps(dict(ok=False, step="mesa", error=erro)), flush=True)
+    try:
+        crew.module("crew_fila").rodada()
+    except crew.Fail as e:
+        print(json.dumps(dict(ok=False, step="fila", error=e.error)), flush=True)
     fechar_mesclados()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))

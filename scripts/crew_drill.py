@@ -167,10 +167,28 @@ class Drill:
         arquivo = retomada.arquivo_da_conversa(self.meta(), retomada.conversa_de(self.meta()))
         return retomada.respostas(arquivo) if arquivo else []
 
+    def folga(self, tem, motivo=None):
+        maquina = crew.module("crew_recursos").aqui()
+        leitura = dict(at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), host=maquina, alcancavel=True, folga=tem, motivo=motivo)
+        crew.write_text(os.path.join(self.estado, "_recursos-%s.json" % maquina), json.dumps(leitura))
+
+    def abrir_pela_fila(self):
+        self.folga(False, "memória: forçada pelo drill")
+        pedido = self.crew_py("spawn", "Drill", self.tarefa, "--host", "local", "--model", self.modelo, "--request", PEDIDO, "--done", PRONTO)
+        if not pedido.get("queued") or os.path.exists(os.path.join(self.estado, self.nome, "meta.json")):
+            raise Fail("drill", "sem Folga o spawn devia pôr a Tarefa na Fila e abriu: %s" % pedido)
+        self.crew_py("fila", "--andar")
+        if [t["name"] for t in self.crew_py("fila")["fila"]] != [self.nome]:
+            raise Fail("drill", "a Tarefa saiu da Fila com a Folga ainda forçada em falta")
+        self.folga(True)
+        self.crew_py("fila", "--andar")
+        if self.crew_py("fila")["fila"] or self.meta().get("error"):
+            raise Fail("drill", "a Folga voltou e a Fila não abriu a Tarefa: %s" % self.meta().get("error"))
+
     def abrir_worker(self):
-        self.crew_py("spawn", "Drill", self.tarefa, "--model", self.modelo, "--request", PEDIDO, "--done", PRONTO)
+        self.abrir_pela_fila()
         self.esperar(lambda: self.respostas() and self.estado_do_worker().get("state") == "idle", ESPERA_DO_TURNO, "o Worker de teste responder")
-        return "Worker %s aberto na conversa %s" % (self.nome, self.nome)
+        return "Worker %s esperou na Fila sem Folga, abriu quando ela voltou e está na conversa %s" % (self.nome, self.nome)
 
     def perguntar(self, texto):
         antes = len(self.respostas())

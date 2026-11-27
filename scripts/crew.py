@@ -7,6 +7,7 @@ chief's pane inside Herdr.
   python scripts/crew.py board                      the whole Time: decisions waiting, running, to review
   python scripts/crew.py spawn <repo> <task> --type implement --request "..." --done "..."
   python scripts/crew.py spawn <repo> <task> --host vps ...   (the worker runs on that ssh host: scripts/crew_remote.py)
+  python scripts/crew.py fila            (the Tarefas waiting for Folga; spawn queues a Tarefa instead of failing)
   python scripts/crew.py ask "question" --recommend "..." --para chief|dono   (a worker asks the chief or the owner)
   python scripts/crew.py answer D3 "the owner's answer"   (P3: the chief answers)
   python scripts/crew.py dono add "text" | done L1   (the owner's own list, on top of `board`; kept outside the repo)
@@ -328,10 +329,13 @@ def cmd_spawn(a):
     if a.context:
         context_block = "\n## Contexto\n\nLeia antes de começar:\n\n" + "\n".join("- " + item for item in a.context) + "\n"
 
-    host = a.host or repo.get("host")
+    host, espera = module("crew_fila").escolher(a, repo, a.type or load("model_routing.json").get("default"))
+    if espera:
+        return module("crew_fila").entrar(a, name, request, espera)
+    frente = getattr(a, "frente", None)
     if host and host != "local":
         job = dict(repo=repo, name=name, task=task, model=model, level=level, request=request,
-                   context_block=context_block, host=host)
+                   context_block=context_block, host=host, frente=frente)
         return remote().spawn(a, job)
 
     path = os.path.expanduser(repo["path"])
@@ -348,6 +352,8 @@ def cmd_spawn(a):
                 brief=posix(os.path.join(folder, "brief.md")), report=posix(os.path.join(folder, "report.md")),
                 state_file=posix(os.path.join(folder, "state.json")), started=now(),
                 request=request, done_when=a.done)
+    if frente:
+        meta["frente"] = frente
     if a.dry_run:
         return dict(ok=True, dry_run=True, **meta)
 
@@ -753,7 +759,7 @@ def cmd_watch(a):
             return dict(ok=True, stopped="chief gone")
         sync_remote()
         open_workers = workers()
-        if open_workers:
+        if open_workers or module("crew_fila").pendentes():
             quiet_since = time.time()
         elif time.time() - quiet_since > 600:
             os.remove(HEARTBEAT)
@@ -817,7 +823,8 @@ def main():
     s.add_argument("--request-file", help="file holding the request")
     s.add_argument("--done", help="the checkable condition that makes the task finished (required)")
     s.add_argument("--context", action="append", help="a file, issue or commit the worker must read first; repeatable")
-    s.add_argument("--host", help="ssh host to run the worker on (default: the repo's `host` in repos.json; `local` forces this machine)")
+    s.add_argument("--frente", help="the Frente this Tarefa belongs to, as its issue (e.g. #66 or repo#66); without it the Tarefa is avulsa")
+    s.add_argument("--host", help="ssh host to run the worker on, which pins the Tarefa to it (default: the repo's `host` in repos.json, else the VPS if it has Folga and the repo, else this machine; `local` pins this machine)")
     s.add_argument("--start-timeout", type=int, default=90, help="seconds to wait for Pi to be ready")
     s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the brief")
     s.add_argument("--dry-run", action="store_true", help="print the plan; create nothing")
@@ -827,6 +834,7 @@ def main():
     s.set_defaults(fn=cmd_board)
     module("crew_retomada").registrar(sub)
     module("crew_drill").registrar(sub)
+    module("crew_fila").registrar(sub)
     s = sub.add_parser("ask", help="a worker asks the chief (default) or records a decision for the owner (--para dono), and keeps working")
     s.add_argument("question")
     s.add_argument("--recommend", required=True, help="what the worker would do, and why")
