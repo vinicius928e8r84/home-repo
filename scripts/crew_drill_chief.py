@@ -15,6 +15,7 @@ crew = None
 ESPERA_DA_VOLTA = 300
 RODADAS_DE_FOLGA = 20
 PERGUNTA = "Pergunta do drill do Chief: a caixa guarda isto?"
+MARCA = "DRILL_CHIEF_ANTIGO"
 PERGUNTA_ANTIGA = "Pergunta do drill ao Chief aberto à moda antiga: chegou?"
 EXTENSOES = ("crew-state.ts", "crew-aviso.ts", os.path.join("lib", "crew-chief.ts"))
 CONFIGURACAO = dict(defaultProvider="claude-bridge", defaultModel="claude-haiku-5-5", defaultThinkingLevel="low")
@@ -66,25 +67,29 @@ class Prova:
     def pids_do_antigo(self):
         achados = []
         for pasta in glob.glob("/proc/[0-9]*"):
-            linha = ler(os.path.join(pasta, "cmdline")).split("\0")
-            if self.antigo() in linha and os.path.realpath(os.path.join(pasta, "cwd")) == os.path.realpath(self.casa):
+            ambiente = ler(os.path.join(pasta, "environ")).split("\0")
+            if MARCA + "=" + self.antigo() in ambiente and os.path.realpath(os.path.join(pasta, "cwd")) == os.path.realpath(self.casa):
                 achados.append(int(os.path.basename(pasta)))
         return achados
 
     def chief_a_moda_antiga_recebe_o_aviso(self):
         painel = self.base.env["HERDR_PANE_ID"]
-        self.base.herdr("pane", "run", painel, "cd %s && pi --approve --session %s" % (shlex.quote(self.casa), shlex.quote(self.antigo())))
+        self.base.herdr("pane", "run", painel, "cd %s && %s=%s pi --approve --session %s" % (shlex.quote(self.casa), MARCA, shlex.quote(self.antigo()), shlex.quote(self.antigo())))
         self.base.esperar(self.pids_do_antigo, ESPERA_DA_VOLTA, "o Chief antigo abrir")
         time.sleep(5)
         self.base.crew_py("tell", "chief", PERGUNTA_ANTIGA)
         self.base.esperar(lambda: PERGUNTA_ANTIGA in ler(self.antigo()), ESPERA_DA_VOLTA, "o aviso chegar ao Chief antigo")
         if PERGUNTA_ANTIGA not in ler(os.path.join(self.base.estado, "_chief", "chief.inbox")):
             raise Fail("drill", "a caixa chief.inbox não guardou o aviso dado ao Chief antigo")
+        if self.estado():
+            raise Fail("drill", "o Chief antigo gravou o estado da conversa chief: %s" % self.estado())
+        conversa = json.loads(ler(self.antigo()).splitlines()[0]).get("id")
         pids = self.pids_do_antigo()
         for pid in pids:
             os.kill(pid, signal.SIGTERM)
         self.base.esperar(lambda: not self.pids_do_antigo(), 30, "o Chief antigo sair")
-        return "o Chief aberto com --session %s (pid %s) recebeu o aviso pelo painel %s, e a caixa chief.inbox o guardou" % (self.antigo(), pids, painel)
+        return "o Chief aberto com --session %s (conversa %s, pids %s) recebeu o aviso pelo painel %s, e a caixa chief.inbox o guardou" % (
+            self.antigo(), conversa, pids, painel)
 
     def abrir_chief(self):
         painel = self.base.env["HERDR_PANE_ID"]
