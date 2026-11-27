@@ -90,6 +90,21 @@ class Prova:
         self.base.esperar(lambda: not crew.module("crew_causa").vivo(pid), 30, "o Pi do Chief morrer")
         return pid
 
+    def worker_parou(self):
+        return any(e and e["kind"] == "stopped" and e["worker"] == self.base.nome for e in crew.read_events())
+
+    def worker_caido_nao_reabre_o_chief(self):
+        chief, antes = self.pid(), self.reaberturas()
+        pid, worktree = self.base.estado_do_worker().get("pid"), self.base.meta()["worktree"]
+        if os.path.realpath("/proc/%s/cwd" % pid) != os.path.realpath(worktree):
+            raise Fail("drill", "o pid %s do estado do Worker não é o Pi dele; não mato" % pid)
+        os.kill(pid, signal.SIGKILL)
+        self.base.esperar(self.worker_parou, ESPERA_DA_VOLTA, "o Vigia ver o Worker de teste parado")
+        time.sleep(RODADAS_DE_FOLGA)
+        if self.reaberturas() != antes or self.pid() != chief:
+            raise Fail("drill", "com só o Worker caído o Vigia mexeu no Chief (pid %s -> %s)" % (chief, self.pid()))
+        return "o Worker caiu (pid %s), o Vigia o viu parado e deixou o Chief (pid %s) como estava" % (pid, chief)
+
     def reabre_uma_vez_so(self):
         antes = self.reaberturas()
         morto = self.matar_o_pi()
@@ -136,6 +151,7 @@ SEQUENCIA = (
     ("abrir o Worker de teste", "abrir_worker"),
     ("abrir o Chief de teste", "abrir_chief"),
     ("ligar o Vigia do drill", "subir_vigia"),
+    ("com o Chief vivo e só o Worker caído, o Vigia não reabre o Chief", "worker_caido_nao_reabre_o_chief"),
     ("matar o Pi do Chief: o Vigia o reabre uma vez só", "reabre_uma_vez_so"),
     ("os avisos de enquanto o Chief esteve fora chegam a ele", "avisos_de_quando_esteve_fora"),
     ("duas reaberturas ao mesmo tempo: só uma passa", "duas_reaberturas_ao_mesmo_tempo"),
