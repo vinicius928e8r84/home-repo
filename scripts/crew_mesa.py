@@ -13,6 +13,7 @@ crew = None
 PORTA = "4388"
 POLL_MS = "1000"
 LIMITE_DO_COMANDO = 90
+VERSAO_DO_LAVISH = "0.1.99"
 RECIBO = "Recebido."
 CAUSAS_DO_DONO = ("crédito", "credencial")
 ANTIGAS = ("mesa.html", "geral.html", "d34-limite-de-linhas.html")
@@ -59,6 +60,8 @@ def ambiente():
 
 
 def executar(argv, env):
+    if argv[0] == "lavish-axi" and not shutil.which("lavish-axi"):
+        argv = ["npx", "-y", "lavish-axi@" + VERSAO_DO_LAVISH] + argv[1:]
     comando = [shutil.which(argv[0]) or argv[0]] + argv[1:]
     try:
         feito = subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=LIMITE_DO_COMANDO)
