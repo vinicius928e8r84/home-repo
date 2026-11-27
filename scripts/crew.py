@@ -749,7 +749,8 @@ def cmd_watch(a):
         os.makedirs(STATE, exist_ok=True)
         with open(HEARTBEAT, "w") as f:
             f.write(json.dumps(dict(at=now(), pid=os.getpid(), chief=chief)))
-        if not pane_alive(chief):
+        chief = module("crew_chief").seguir(chief)
+        if not chief:
             print(json.dumps(dict(ok=True, stopped="the chief's pane is gone")), flush=True)
             os.remove(HEARTBEAT)
             return dict(ok=True, stopped="chief gone")
