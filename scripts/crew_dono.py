@@ -64,7 +64,7 @@ def espera_o_dono(sessao, decisoes):
 
 def paginas_abertas(texto, decisoes=""):
     sessoes = json.loads(texto).get("sessions", {}).values()
-    return [(os.path.splitext(os.path.basename(s["file"].replace("\\", "/")))[0], s.get("url")) for s in sessoes if espera_o_dono(s, decisoes)]
+    return [(s["file"].replace("\\", "/"), s.get("url")) for s in sessoes if espera_o_dono(s, decisoes)]
 
 
 def hosts():
@@ -80,7 +80,7 @@ def ler_de(host):
     return crew.remote().ssh(host, LER_ESTADO_DO_LAVISH, "lavish")
 
 
-def paginas(decisoes):
+def arquivos_esperando(decisoes):
     achadas, avisos = [], []
     for onde, ler in [("o PC", ler_do_pc)] + [(h, lambda h=h: ler_de(h)) for h in hosts()]:
         try:
@@ -88,6 +88,21 @@ def paginas(decisoes):
         except (Fail, ValueError, KeyError) as e:
             avisos.append("não consegui ler as páginas lavish de %s: %s" % (onde, getattr(e, "error", e)))
     return achadas, avisos
+
+
+def paginas(decisoes):
+    achadas, avisos = arquivos_esperando(decisoes)
+    return [(os.path.splitext(os.path.basename(arquivo))[0], link) for arquivo, link in achadas], avisos
+
+
+def paginas_esperando(decisoes):
+    achadas, avisos = arquivos_esperando(decisoes)
+    return None if avisos else [arquivo.casefold() for arquivo, _ in achadas]
+
+
+def tem_pagina(pasta, arquivos):
+    raiz = pasta.replace("\\", "/").rstrip("/").casefold() + "/"
+    return arquivos is None or any(arquivo.startswith(raiz) for arquivo in arquivos)
 
 
 def linhas(decisoes_abertas):
