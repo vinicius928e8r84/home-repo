@@ -1,5 +1,7 @@
+import glob
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -13,6 +15,7 @@ crew = None
 ESPERA_DA_VOLTA = 300
 RODADAS_DE_FOLGA = 20
 PERGUNTA = "Pergunta do drill do Chief: a caixa guarda isto?"
+PERGUNTA_ANTIGA = "Pergunta do drill ao Chief aberto à moda antiga: chegou?"
 EXTENSOES = ("crew-state.ts", "crew-aviso.ts", os.path.join("lib", "crew-chief.ts"))
 CONFIGURACAO = dict(defaultProvider="claude-bridge", defaultModel="claude-haiku-5-5", defaultThinkingLevel="low")
 
@@ -57,9 +60,35 @@ class Prova:
         self.base.env["CREW_CHIEF_DIR"] = self.casa
         return detalhe
 
+    def antigo(self):
+        return os.path.join(self.base.pasta, "antigo.jsonl")
+
+    def pids_do_antigo(self):
+        achados = []
+        for pasta in glob.glob("/proc/[0-9]*"):
+            linha = ler(os.path.join(pasta, "cmdline")).split("\0")
+            if self.antigo() in linha and os.path.realpath(os.path.join(pasta, "cwd")) == os.path.realpath(self.casa):
+                achados.append(int(os.path.basename(pasta)))
+        return achados
+
+    def chief_a_moda_antiga_recebe_o_aviso(self):
+        painel = self.base.env["HERDR_PANE_ID"]
+        self.base.herdr("pane", "run", painel, "cd %s && pi --approve --session %s" % (shlex.quote(self.casa), shlex.quote(self.antigo())))
+        self.base.esperar(self.pids_do_antigo, ESPERA_DA_VOLTA, "o Chief antigo abrir")
+        time.sleep(5)
+        self.base.crew_py("tell", "chief", PERGUNTA_ANTIGA)
+        self.base.esperar(lambda: PERGUNTA_ANTIGA in ler(self.antigo()), ESPERA_DA_VOLTA, "o aviso chegar ao Chief antigo")
+        if PERGUNTA_ANTIGA not in ler(os.path.join(self.base.estado, "_chief", "chief.inbox")):
+            raise Fail("drill", "a caixa chief.inbox não guardou o aviso dado ao Chief antigo")
+        pids = self.pids_do_antigo()
+        for pid in pids:
+            os.kill(pid, signal.SIGTERM)
+        self.base.esperar(lambda: not self.pids_do_antigo(), 30, "o Chief antigo sair")
+        return "o Chief aberto com --session %s (pid %s) recebeu o aviso pelo painel %s, e a caixa chief.inbox o guardou" % (self.antigo(), pids, painel)
+
     def abrir_chief(self):
         painel = self.base.env["HERDR_PANE_ID"]
-        self.base.herdr("pane", "run", painel, "cd %s && pi --session-id chief" % shlex.quote(self.casa))
+        self.base.herdr("pane", "run", painel, "cd %s && %s" % (shlex.quote(self.casa), crew.module("crew_chief").COMANDO))
         self.esperar_o_chief(None)
         return "o Chief de teste abriu na conversa chief (pid %s)" % self.pid()
 
@@ -121,6 +150,9 @@ class Prova:
         self.base.esperar(lambda: self.conversa().count(PERGUNTA) >= 2, ESPERA_DA_VOLTA, "o aviso e o resumo chegarem ao Chief")
         if "Causa da queda" not in self.conversa():
             raise Fail("drill", "o Chief voltou sem a mensagem com a causa da queda")
+        antigas = [nome for nome in os.listdir(os.path.join(self.base.estado, "_chief")) if nome.endswith(".inbox") and nome != "chief.inbox"]
+        if antigas:
+            raise Fail("drill", "com a conversa chief aberta o aviso ainda foi para a caixa do painel: %s" % antigas)
         return "o aviso da caixa e o resumo de volta chegaram ao Chief"
 
     def duas_reaberturas_ao_mesmo_tempo(self):
@@ -144,11 +176,22 @@ class Prova:
         self.base.limpar()
         if pasta and "crew-drill-" in os.path.basename(pasta):
             shutil.rmtree(pasta, ignore_errors=True)
+        self.apagar_rastros_da_casa()
+
+    def apagar_rastros_da_casa(self):
+        cwd_do = crew.module("crew_drill").cwd_do
+        pontes = glob.glob(os.path.join(crew.module("crew_retomada").pi_dir(), "claude-bridge", "sessions", "s-*.json"))
+        processos = glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "sessions", "*.json"))
+        for caminho in [c for c in pontes if cwd_do(c) == self.casa] + [c for c in processos if cwd_do(c) == self.casa]:
+            for achado in [caminho] + glob.glob(caminho[:-len(".json")] + ".*.key"):
+                os.remove(achado)
+        shutil.rmtree(os.path.join(os.path.expanduser("~"), ".claude", "projects", re.sub(r"[^A-Za-z0-9]", "-", self.casa)), ignore_errors=True)
 
 
 SEQUENCIA = (
     ("preparar a sessão descartável", "preparar"),
     ("abrir o Worker de teste", "abrir_worker"),
+    ("um Chief aberto à moda antiga (--session <arquivo>) recebe o aviso", "chief_a_moda_antiga_recebe_o_aviso"),
     ("abrir o Chief de teste", "abrir_chief"),
     ("ligar o Vigia do drill", "subir_vigia"),
     ("com o Chief vivo e só o Worker caído, o Vigia não reabre o Chief", "worker_caido_nao_reabre_o_chief"),
