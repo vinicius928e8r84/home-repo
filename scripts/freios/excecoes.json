@@ -26,6 +26,24 @@
   "sintaxe": [],
   "segredo": [],
   "binario": [],
+  "depuracao": [
+    {
+      "glob": "scripts/check_routing.py",
+      "motivo": "script de linha de comando que chama main() ao ser carregado, sem o ponto de entrada; imprimir o resultado da conferência é o trabalho dele"
+    },
+    {
+      "glob": "scripts/crew_firstmate.py",
+      "motivo": "módulo que o crew.py carrega e que responde ao orquestrador com linhas JSON na saída; imprimir é o protocolo dele"
+    },
+    {
+      "glob": "scripts/crew_vigia.py",
+      "motivo": "módulo que o crew.py carrega e que responde ao orquestrador com linhas JSON na saída; imprimir é o protocolo dele"
+    },
+    {
+      "glob": "scripts/freios/principal.py",
+      "motivo": "é a saída do comando dos freios: imprimir o veredito é o trabalho do módulo, e ele não tem ponto de entrada próprio (quem chama é freios.py)"
+    }
+  ],
   "funcoes": [
     {
       "glob": "scripts/crew.py",

@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 
 from scripts.freios import (
-    autoria, binario, catraca, comentarios, externos, funcoes, links, orcamento, segredo, sintaxe, skills, tamanho, testes,
+    autoria, binario, catraca, comentarios, depuracao, externos, funcoes, links, orcamento, segredo, sintaxe, skills,
+    tamanho, testes,
 )
 from scripts.freios.git import montar_contexto, raiz_do_repositorio
 
-POR_ARQUIVO = [tamanho, funcoes, comentarios, sintaxe, segredo, binario, externos]
+POR_ARQUIVO = [tamanho, funcoes, comentarios, sintaxe, segredo, binario, depuracao, externos]
 NO_COMMIT = [tamanho, comentarios]
 DO_REPOSITORIO = [skills, links, orcamento, autoria, testes]
 USO = """Os freios do repositório: tetos de tamanho, sem comentário, sintaxe, segredo, skills, links,
