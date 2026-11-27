@@ -10,7 +10,7 @@ E2E_VPS = "1379046 WRITE  /home/factory/crew-state/e2e.lock\n1403209 WRITE* 1379
 E2E_PROCS = "1379046|/home/factory/worktrees/PerpetualMiner-rev-t3/e2e|57\n1403209|/tmp/rev920/pr|5"
 MAC_NA_VPS = "1500100 WRITE  /home/factory/crew-state/mac.lock"
 MAC_PROCS_NA_VPS = "1500100|/home/factory/worktrees/Nova-AI-prova|3725"
-LOCKF_NO_MAC = "93607|/Users/viniciusoliveiraaraujo|1-02:03:04"
+LOCKF_NO_MAC = "93607|/Users/usuario/prova|1-02:03:04"
 
 
 def pc(livre_mb=2473, cpu=65, fila=37, disco=4.7):
@@ -249,7 +249,7 @@ class QuemTemAsTravas(RecursosCase):
             dict(nome="mac", lugar="vps", caminho="~/crew-state/mac.lock",
                  com=dict(pid=1500100, onde="Nova-AI-prova", worker=None, ha_s=3725), esperando=[]),
             dict(nome="mac", lugar="mac", caminho="/tmp/fm-mac.lock",
-                 com=dict(pid=93607, onde="/Users/viniciusoliveiraaraujo", worker=None, ha_s=93784), esperando=[])])
+                 com=dict(pid=93607, onde="/Users/usuario/prova", worker=None, ha_s=93784), esperando=[])])
 
     def test_o_pc_nao_tem_trava(self):
         self.rodar()
