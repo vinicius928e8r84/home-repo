@@ -183,14 +183,25 @@ class Drill:
         achados = subprocess.run(["pgrep", "-P", str(pid)], capture_output=True, text=True, check=False)
         return [int(numero) for numero in achados.stdout.split()]
 
+    def rodando_sleep(self, pid):
+        for filho in self.filhos_do_pi(pid):
+            try:
+                with open("/proc/%d/cmdline" % filho, encoding="utf-8", errors="replace") as f:
+                    if f.read().split("\0")[0] == "sleep":
+                        return True
+            except OSError:
+                continue
+        return False
+
     def matar_pi(self):
         pid = self.estado_do_worker().get("pid")
         if os.path.realpath("/proc/%s/cwd" % pid) != os.path.realpath(self.meta()["worktree"]):
             raise Fail("drill", "o pid %s do estado do Worker não é o Pi dele; não mato" % pid)
         self.crew_py("tell", self.nome, COMANDO_LONGO)
-        self.esperar(lambda: self.filhos_do_pi(pid), ESPERA_DO_TURNO, "o Pi rodar o comando")
+        self.esperar(lambda: self.rodando_sleep(pid), ESPERA_DO_TURNO, "o Pi rodar o `sleep 90`")
         for alvo in self.filhos_do_pi(pid) + [pid]:
             os.kill(alvo, signal.SIGKILL)
+        self.esperar(lambda: not crew.module("crew_causa").vivo(pid), ESPERA_DO_SERVIDOR, "o Pi morto sair da lista de processos")
         return self.retomar_e_conferir("Pi saiu")
 
     def fechar_painel(self):
@@ -233,12 +244,18 @@ class Drill:
 
     def apagar_conversas(self):
         try:
-            caminhos = [caminho for par in self.do_bridge() for caminho in par]
+            pares = self.do_bridge()
+            caminhos = [caminho for par in pares for caminho in par]
             pasta = crew.module("crew_retomada").pasta_das_conversas(self.meta())
         except (OSError, ValueError, KeyError):
             return
         for caminho in caminhos:
             os.remove(caminho)
+        for projeto in {os.path.dirname(transcript) for _, transcript in pares}:
+            try:
+                os.rmdir(projeto)
+            except OSError:
+                pass
         shutil.rmtree(pasta, ignore_errors=True)
 
     def passo(self, nome, funcao):
