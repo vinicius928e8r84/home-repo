@@ -41,7 +41,7 @@ def tomar_trava():
             aberta = os.open(caminho, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             if trava_ativa():
-                raise Fail("chief", "a retomada do Chief já está em andamento")
+                raise Fail("chief", "a retomada do Chief já está em andamento") from None
             os.remove(caminho)
             continue
         with os.fdopen(aberta, "w", encoding="utf-8") as f:
@@ -134,7 +134,7 @@ def seguir(painel):
         try:
             return reabrir()["pane"]
         except Fail as e:
-            print(json.dumps(dict(ok=False, step="chief", error=e.error)), flush=True)
+            crew.emit("chief_resume_failed", CONVERSA, error=e.error)
     return estado.get("pane") or painel
 
 
