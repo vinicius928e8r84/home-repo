@@ -824,6 +824,7 @@ def main():
     s.add_argument("--json", action="store_true", help="machine-readable instead of the text board")
     s.set_defaults(fn=cmd_board)
     module("crew_retomada").registrar(sub)
+    module("crew_drill").registrar(sub)
     s = sub.add_parser("ask", help="a worker asks the chief (default) or records a decision for the owner (--para dono), and keeps working")
     s.add_argument("question")
     s.add_argument("--recommend", required=True, help="what the worker would do, and why")

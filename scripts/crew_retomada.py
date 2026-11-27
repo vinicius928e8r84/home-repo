@@ -13,9 +13,12 @@ def sessao():
     return crew.module("crew_sessao")
 
 
+def pi_dir():
+    return os.environ.get("PI_CODING_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
+
+
 def pasta_das_conversas(meta):
-    pi = os.environ.get("PI_CODING_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
-    return os.path.join(pi, "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+    return os.path.join(pi_dir(), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
 
 
 def conversa_de(meta):
