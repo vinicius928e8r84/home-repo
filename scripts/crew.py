@@ -399,7 +399,7 @@ OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")
 
 
 def has_own_commit(meta):
-    out = subprocess.run(git_argv(meta) + ["log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
+    out = subprocess.run(git_argv(meta) + ["log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True, encoding="utf-8", errors="replace")
     entries = out.stdout.splitlines() if out.returncode == 0 else []
     return not entries or any(e.startswith(OWN_COMMIT) for e in entries)
 
