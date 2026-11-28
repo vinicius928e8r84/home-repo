@@ -460,8 +460,8 @@ def cmd_answer(a):
         return dict(ok=True, id=entry["id"], worker="chief", delivered=False, note="a decision of the chief's own: act on it")
     meta = read_meta(entry["worker"])
     delivered, note = False, None
-    if meta.get("closed") or worker_state(meta) == "gone":
-        note = "the worker is closed; the answer is recorded but nobody is acting on it"
+    if meta.get("closed") or worker_state(meta) == "gone" or (not meta.get("host") and module("crew_causa").morto(file_state(meta["state_file"]))):
+        note = "not delivered: the worker is closed or its Pi is gone"
     else:
         send("prompt", meta["pane"], "[chief] %s %s (%s): %s" % (module("crew_conversa").label(entry), entry["id"], entry["question"], a.answer))
         delivered = True

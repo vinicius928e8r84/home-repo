@@ -242,7 +242,7 @@ class Drill:
 
     def do_bridge(self):
         worktree, achados = self.meta()["worktree"], []
-        for caminho in glob.glob(os.path.join(crew.module("crew_retomada").pi_dir(), "claude-bridge", "sessions", "s-*.json")):
+        for caminho in glob.glob(os.path.join(crew.module("crew_retomada").pi_dir(self.meta()), "claude-bridge", "sessions", "s-*.json")):
             with open(caminho, encoding="utf-8") as f:
                 estado = json.load(f)
             if estado.get("cwd") == worktree:
@@ -286,13 +286,18 @@ class Drill:
     def apagar_conversas(self):
         try:
             estados = [estado for estado, _ in self.do_bridge()]
-            pastas = [crew.module("crew_retomada").pasta_das_conversas(self.meta()), self.projeto_do_claude()]
+            retomada = crew.module("crew_retomada")
+            conversas, pasta = retomada.conversas_do_worker(self.meta()), retomada.pasta_das_conversas(self.meta())
+            projeto = self.projeto_do_claude()
         except (OSError, ValueError, KeyError):
             return
-        for caminho in estados + self.processos_do_claude():
+        for caminho in estados + conversas + self.processos_do_claude():
             os.remove(caminho)
-        for pasta in pastas:
-            shutil.rmtree(pasta, ignore_errors=True)
+        shutil.rmtree(projeto, ignore_errors=True)
+        try:
+            os.rmdir(pasta)
+        except OSError:
+            return
 
     def processos_do_claude(self):
         achados = []

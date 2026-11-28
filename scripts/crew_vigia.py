@@ -20,6 +20,7 @@ ACORDAM = {
     "PR pronta para merge": {"pr_ready_merge"},
     "branch mesclada": {"merged"},
     "Tarefa esperando Folga": {"fila_espera"},
+    "Retomada sem sucesso": {"retomada_esgotada"},
 }
 SEM_PR = "relatório sem PR"
 TEXTOS = {
@@ -70,6 +71,8 @@ def obsoleto(evento, ciclo):
         return fechado.get("kind") == "closed"
     if tipo in PRS_PRONTAS:
         return (fechado.get("kind") == "closed" and bool(fechado.get("merged"))) or pr_encerrada(evento)
+    if tipo == "stopped":
+        return evento.get("cause") in crew.module("crew_retomada_auto").SEM_AVISO_NA_HORA
     if tipo in PEDIDOS:
         return crew.decisions().get(evento.get("id"), {}).get("status", "open") != "open"
     return False
@@ -112,6 +115,8 @@ def texto(evento):
         return "%s: espera na Fila há %d min (%s)" % (evento["worker"], evento.get("minutos", 0), evento.get("motivo"))
     if tipo == "stopped":
         return "%s: parou, causa: %s" % (evento["worker"], evento.get("cause"))
+    if tipo == "retomada_esgotada":
+        return "%s: a Retomada automática não funcionou depois de %d tentativas (causa: %s)" % (evento["worker"], evento.get("tentativas", 0), evento.get("causa"))
     if tipo.startswith("pr_ready"):
         return "%s#%s «%s» (%s)" % (evento.get("repo"), evento.get("number"), evento.get("title"), evento["worker"])
     return "%s: %s" % (evento["worker"], TEXTOS.get(tipo, tipo))
@@ -210,6 +215,9 @@ def rodada(chief, minutos=RESUMO_MINUTOS):
         crew.module("crew_fila").rodada()
     except crew.Fail as e:
         print(json.dumps(dict(ok=False, step="fila", error=e.error)), flush=True)
+    erro = crew.module("crew_retomada_auto").rodada()
+    if erro:
+        print(json.dumps(dict(ok=False, step="retomada", error=erro)), flush=True)
     fechar_mesclados()
     eventos = crew.read_events()
     avisados = crew.notice_cursor(len(eventos))

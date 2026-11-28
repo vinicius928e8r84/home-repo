@@ -61,6 +61,11 @@ def pid_do(visto):
     return pid if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 else None
 
 
+def morto(visto):
+    pid = pid_do(visto)
+    return pid is not None and not vivo(pid)
+
+
 def da_parada(visto, agora=None):
     agora = agora or datetime.datetime.now(datetime.timezone.utc)
     if visto.get("state") == "gone":

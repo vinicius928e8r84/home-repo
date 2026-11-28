@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 Fail = None
 crew = None
@@ -7,18 +8,46 @@ crew = None
 CAUSA_DO_BRIDGE = "conversa quebrada no bridge"
 SEM_CAUSA = "não registrada"
 ESPERA_DA_RESPOSTA = 120
+SESSOES = "PI_CODING_AGENT_SESSION_DIR"
+AGENTE = "PI_CODING_AGENT_DIR"
 
 
 def sessao():
     return crew.module("crew_sessao")
 
 
-def pi_dir():
-    return os.environ.get("PI_CODING_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
+def pi_dir(meta=None):
+    return variavel_do_pi(meta, AGENTE, "agente") or os.path.join(os.path.expanduser("~"), ".pi", "agent")
+
+
+def ler_ambiente(bruto):
+    pares = (item.partition("=") for item in bruto.split("\0") if "=" in item)
+    return {nome: valor for nome, _, valor in pares}
+
+
+def ambiente_do_pi(pid):
+    try:
+        with open("/proc/%s/environ" % pid, encoding="utf-8", errors="replace") as f:
+            return ler_ambiente(f.read())
+    except OSError:
+        return {}
+
+
+def variavel_do_pi(meta, variavel, campo):
+    visto = crew.file_state(meta.get("state_file") or "") if meta else {}
+    return visto.get(campo) or ambiente_do_pi(visto.get("pid")).get(variavel) or os.environ.get(variavel)
 
 
 def pasta_das_conversas(meta):
-    return os.path.join(pi_dir(), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+    plana = variavel_do_pi(meta, SESSOES, "sessoes")
+    return plana or os.path.join(pi_dir(meta), "sessions", sessao().pasta_da_sessao(meta["worktree"]))
+
+
+def conversas_do_worker(meta):
+    pasta = pasta_das_conversas(meta)
+    nomes = os.listdir(pasta) if os.path.isdir(pasta) else []
+    dele = re.compile(r"%s(-\d+)?\.jsonl" % re.escape(meta["name"]))
+    return [os.path.join(pasta, nome) for nome in nomes if dele.fullmatch(nome.partition("_")[2])]
 
 
 def conversa_de(meta):
@@ -186,3 +215,4 @@ def registrar(sub):
     s.add_argument("--prompt-timeout", type=int, default=20, help="seconds to wait, after each send, for Pi to start on the message")
     s.set_defaults(fn=retomar)
     crew.module("crew_chief").registrar(sub)
+    crew.module("crew_drill_sozinha").registrar(sub)

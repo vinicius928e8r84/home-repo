@@ -150,7 +150,7 @@ class VigiaEPainel(CrewCase):
 
     def test_a_mesma_causa_avisa_uma_vez_so(self):
         meta = self.add_worker()
-        self.gravar(meta, outcome=dict(type="error", message="fetch failed"))
+        self.gravar(meta, outcome=dict(type="error", message="ENOSPC: no space left on device"))
         self.watch(rounds=3)
         self.assertEqual(len(self.paradas()), 1)
         self.assertEqual(len(self.told_chief()), 1)
