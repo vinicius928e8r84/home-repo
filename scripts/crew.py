@@ -131,7 +131,7 @@ def herdr(step, *args):
     session = os.environ.get("CREW_HERDR_SESSION")
     if not session and os.environ.get("HERDR_ENV") != "1":
         raise Fail(step, "not inside a Herdr pane (HERDR_ENV is not 1): open Herdr and run the chief from a pane")
-    exe = shutil.which("herdr")
+    exe = module("crew_exe").achar("herdr")
     if not exe:
         raise Fail(step, "`herdr` is not on PATH")
     text = run(step, [exe] + (["--session", session] if session else []) + list(args))
@@ -399,7 +399,7 @@ OWN_COMMIT = ("commit", "cherry-pick", "revert", "am")
 
 
 def has_own_commit(meta):
-    out = subprocess.run(git_argv(meta) + ["log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True)
+    out = subprocess.run(git_argv(meta) + ["log", "-g", "--format=%gs", "refs/heads/" + meta["branch"]], capture_output=True, text=True, encoding="utf-8", errors="replace")
     entries = out.stdout.splitlines() if out.returncode == 0 else []
     return not entries or any(e.startswith(OWN_COMMIT) for e in entries)
 
