@@ -3,7 +3,7 @@
   "routes": {
     "orchestrate": { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
     "plan":        { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
-    "review":      { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
+    "review":      { "model": "openai/gpt-6.2-sol",              "thinking": "medium" },
     "implement":   { "model": "claude-bridge/claude-sonnet-5-5", "thinking": "high" },
     "merge":       { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" },
     "research":    { "model": "claude-bridge/claude-opus-5-5",   "thinking": "medium" }
