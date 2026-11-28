@@ -105,13 +105,22 @@ def pedir_ao_dono(meta, causa, registro):
     gravar(meta, registro)
 
 
+def pi_vivo(meta):
+    causa = crew.module("crew_causa")
+    pid = causa.pid_do(crew.file_state(meta["state_file"]))
+    return pid is not None and causa.vivo(pid)
+
+
 def pelo_dono(meta, causa, registro):
     decisao = crew.decisions().get(registro.get("decisao"))
     if decisao is None or registro.get("consumida"):
         pedir_ao_dono(meta, causa, registro)
     elif decisao.get("status") != "open":
         registro["consumida"] = True
-        tentar(meta, registro)
+        if pi_vivo(meta):
+            gravar(meta, registro)
+        else:
+            tentar(meta, registro)
 
 
 def saudavel(visto):

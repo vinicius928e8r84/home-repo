@@ -185,6 +185,34 @@ class CreditoECredencial(Automatica):
     def test_credencial_vira_decisao_do_dono_e_volta_quando_ele_responde(self):
         self.confere(CREDENCIAL, "credencial")
 
+    def parar_com_o_pi(self, desfecho):
+        self.parar(desfecho)
+        with open(self.meta["state_file"], encoding="utf-8") as f:
+            visto = json.load(f)
+        with open(self.meta["state_file"], "w", encoding="utf-8") as f:
+            json.dump(dict(visto, pid=4242), f)
+
+    def responder_com_o_pi(self, desfecho, vivo):
+        self.crew.module("crew_causa").vivo = lambda pid: vivo
+        self.parar_com_o_pi(desfecho)
+        self.rodar(1)
+        abertos = dict(self.herdr.launched)
+        resposta = self.dono_responde("resolvido")
+        self.parar_com_o_pi(desfecho)
+        self.rodar(1)
+        return resposta, abertos
+
+    def test_com_o_pi_vivo_a_resposta_entregue_basta_e_o_vigia_nao_o_derruba(self):
+        resposta, abertos = self.responder_com_o_pi(CREDITO, vivo=True)
+        self.assertTrue(resposta["delivered"])
+        self.assertEqual((self.herdr.launched, self.retomadas()), (abertos, []))
+
+    def test_com_o_pi_morto_a_resposta_nao_vai_ao_painel_e_o_vigia_o_reabre(self):
+        resposta, abertos = self.responder_com_o_pi(CREDENCIAL, vivo=False)
+        self.assertFalse(resposta["delivered"])
+        self.assertEqual(len(self.retomadas()), 1)
+        self.assertNotIn("resolvido", " ".join(m for _, m in self.mensagens))
+
     def test_nao_acorda_o_chief_com_a_parada_alem_da_decisao(self):
         self.parar(CREDITO)
         self.rodar(1)
