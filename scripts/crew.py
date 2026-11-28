@@ -131,7 +131,7 @@ def herdr(step, *args):
     session = os.environ.get("CREW_HERDR_SESSION")
     if not session and os.environ.get("HERDR_ENV") != "1":
         raise Fail(step, "not inside a Herdr pane (HERDR_ENV is not 1): open Herdr and run the chief from a pane")
-    exe = shutil.which("herdr")
+    exe = module("crew_exe").achar("herdr")
     if not exe:
         raise Fail(step, "`herdr` is not on PATH")
     text = run(step, [exe] + (["--session", session] if session else []) + list(args))
